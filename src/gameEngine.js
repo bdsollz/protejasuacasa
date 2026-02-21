@@ -475,9 +475,23 @@ export function quitChallenge(room, attackerId, now) {
 }
 
 export function evaluateGameOver(room) {
-  const activeCount = [...room.players.values()].filter((p) => p.status === "alive").length;
-  if (room.status !== "in_game" || activeCount > 0) {
+  if (room.status !== "in_game") {
     return { finished: false };
+  }
+
+  const alivePlayers = [...room.players.values()].filter((p) => p.status === "alive");
+  if (alivePlayers.length > 1) {
+    return { finished: false };
+  }
+
+  // If only one player remains active, finalize placement to prevent deadlock
+  // where no valid targets are left for attacks.
+  if (alivePlayers.length === 1) {
+    const survivor = alivePlayers[0];
+    survivor.status = "finished";
+    if (!room.finishOrder.includes(survivor.id)) {
+      room.finishOrder.push(survivor.id);
+    }
   }
 
   room.status = "finished";

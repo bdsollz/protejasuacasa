@@ -139,6 +139,16 @@ test("game termina quando não há jogadores ativos", () => {
   assert.ok(result.report);
 });
 
+test("game termina quando resta apenas um jogador ativo", () => {
+  const room = setupRoom();
+  room.players.get("p1").status = "alive";
+  room.players.get("p2").status = "finished";
+
+  const result = evaluateGameOver(room);
+  assert.equal(result.finished, true);
+  assert.equal(room.players.get("p1").status, "finished");
+});
+
 test("host pode finalizar partida com relatório", () => {
   const room = setupRoom();
   const result = finishGameByHost(room, "p1");
