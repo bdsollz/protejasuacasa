@@ -23,9 +23,7 @@ function setupRoom() {
     fixedStealCap: 25,
     percentStealCap: 0.2,
     baseStealValue: 18,
-    maxAttempts: 3,
-    failCost: 8,
-    shieldSeconds: 12
+    failCost: 8
   });
   startGame(room);
   return room;
@@ -52,24 +50,19 @@ test("roubo respeita teto percentual do alvo", () => {
   assert.equal(room.players.get("p2").points, 48);
 });
 
-test("falha aplica custo sem zerar atacante por penalidade", () => {
+test("erro não consome tentativas (ilimitado)", () => {
   const room = setupRoom();
-  room.players.get("p1").points = 3;
 
   const started = startInvasion(room, "p1", "p2", Date.now());
   assert.equal(started.ok, true);
 
-  let response;
-  response = submitAnswer(room, "p1", "ERRADO", Date.now());
-  assert.equal(response.resolved, false);
-  response = submitAnswer(room, "p1", "ERRADO", Date.now());
-  assert.equal(response.resolved, false);
-  response = submitAnswer(room, "p1", "ERRADO", Date.now());
-  assert.equal(response.resolved, true);
-
-  assert.equal(response.result.value, 2);
-  assert.equal(room.players.get("p1").points, 1);
-  assert.equal(room.players.get("p2").points, 102);
+  const response1 = submitAnswer(room, "p1", "ERRADO", Date.now());
+  const response2 = submitAnswer(room, "p1", "ERRADO", Date.now());
+  const response3 = submitAnswer(room, "p1", "ERRADO", Date.now());
+  assert.equal(response1.resolved, false);
+  assert.equal(response2.resolved, false);
+  assert.equal(response3.resolved, false);
+  assert.equal(room.activeChallenges.has("p1"), true);
 });
 
 test("sair da casa resolve como falha", () => {
@@ -82,6 +75,19 @@ test("sair da casa resolve como falha", () => {
   assert.equal(response.ok, true);
   assert.equal(response.resolved, true);
   assert.equal(response.result.success, false);
+});
+
+test("pode pegar pontos da mesma casa várias vezes seguidas", () => {
+  const room = setupRoom();
+
+  const first = startInvasion(room, "p1", "p2", Date.now());
+  assert.equal(first.ok, true);
+  const challenge1 = room.activeChallenges.get("p1");
+  const result1 = submitAnswer(room, "p1", challenge1.answer, Date.now());
+  assert.equal(result1.resolved, true);
+
+  const second = startInvasion(room, "p1", "p2", Date.now());
+  assert.equal(second.ok, true);
 });
 
 test("host pode finalizar partida antecipadamente", () => {

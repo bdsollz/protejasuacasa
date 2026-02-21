@@ -12,6 +12,10 @@
         <h1>Proteja sua Casa</h1>
         <div id="statusLabel">Desconectado</div>
       </header>
+      <section class="panel updates-panel">
+        <h3>Atualizações</h3>
+        <ul id="updates-list"></ul>
+      </section>
 
       <section id="screen-entry" class="screen active">
         <h2>Entrar no jogo</h2>
@@ -24,7 +28,7 @@
       </section>
 
       <section id="screen-lobby" class="screen">
-        <h2>Lobby</h2>
+        <h2>Sala de espera</h2>
         <p>Código: <strong id="room-code">-</strong></p>
         <div id="settings" class="panel"></div>
         <div class="panel">
@@ -41,12 +45,11 @@
       </section>
 
       <section id="screen-challenge" class="screen">
-        <h2>Invasão</h2>
+        <h2>Pegar pontos</h2>
         <p id="challenge-target"></p>
         <p id="challenge-hint"></p>
         <p id="challenge-word" class="word"></p>
         <label>Resposta<input id="challenge-input" autocomplete="off" /></label>
-        <p>Tentativas: <strong id="challenge-attempts">0</strong></p>
         <button id="btn-submit-answer" class="full">Enviar</button>
         <button id="btn-quit-challenge" class="full danger">Sair da casa</button>
       </section>

@@ -90,6 +90,17 @@ button {
   margin-bottom: 10px;
 }
 
+.updates-panel {
+  margin-top: 8px;
+}
+
+.updates-panel ul {
+  margin: 0;
+  padding-left: 18px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
 .grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -109,10 +120,6 @@ button {
 
 .house.dead {
   opacity: 0.45;
-}
-
-.house.shield {
-  outline: 2px solid #80ed99;
 }
 
 .hud {

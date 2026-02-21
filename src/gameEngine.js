@@ -14,12 +14,10 @@ export function sanitizeSettings(input = {}) {
   return {
     initialPoints: Math.max(10, toInt(input.initialPoints, DEFAULT_SETTINGS.initialPoints)),
     victoryGoal: Math.max(50, toInt(input.victoryGoal, DEFAULT_SETTINGS.victoryGoal)),
-    maxAttempts: Math.max(1, toInt(input.maxAttempts, DEFAULT_SETTINGS.maxAttempts)),
     fixedStealCap: Math.max(5, toInt(input.fixedStealCap, DEFAULT_SETTINGS.fixedStealCap)),
     percentStealCap: Math.min(0.5, Math.max(0.05, Number(input.percentStealCap ?? DEFAULT_SETTINGS.percentStealCap))),
     baseStealValue: Math.max(3, toInt(input.baseStealValue, DEFAULT_SETTINGS.baseStealValue)),
-    failCost: Math.max(1, toInt(input.failCost, DEFAULT_SETTINGS.failCost)),
-    shieldSeconds: Math.max(0, toInt(input.shieldSeconds, DEFAULT_SETTINGS.shieldSeconds))
+    failCost: Math.max(1, toInt(input.failCost, DEFAULT_SETTINGS.failCost))
   };
 }
 
@@ -43,20 +41,17 @@ export function createPlayer({ id, name, socketId, isHost = false }) {
     isHost,
     points: 0,
     status: "alive",
-    shieldUntilTs: 0,
     result: null
   };
 }
 
 export function roomSnapshot(room) {
-  const now = Date.now();
   const players = [...room.players.values()].map((p) => ({
     id: p.id,
     name: p.name,
     isHost: p.id === room.hostId,
     points: p.points,
-    status: p.status,
-    shieldActive: now < p.shieldUntilTs
+    status: p.status
   }));
 
   return {
@@ -75,7 +70,6 @@ export function startGame(room) {
   for (const player of room.players.values()) {
     player.points = room.settings.initialPoints;
     player.status = "alive";
-    player.shieldUntilTs = 0;
     player.result = null;
   }
 }
@@ -92,7 +86,7 @@ function eliminateIfNeeded(player) {
   }
 }
 
-export function canTarget(room, attackerId, targetId, now) {
+export function canTarget(room, attackerId, targetId) {
   const attacker = room.players.get(attackerId);
   const target = room.players.get(targetId);
 
@@ -111,9 +105,6 @@ export function canTarget(room, attackerId, targetId, now) {
   if (attackerId === targetId) {
     return { ok: false, reason: "Não pode invadir a própria casa" };
   }
-  if (now < target.shieldUntilTs) {
-    return { ok: false, reason: "Casa protegida por escudo" };
-  }
   if (room.activeChallenges.has(attackerId)) {
     return { ok: false, reason: "Finalize seu desafio atual" };
   }
@@ -122,7 +113,7 @@ export function canTarget(room, attackerId, targetId, now) {
 }
 
 export function startInvasion(room, attackerId, targetId, now) {
-  const valid = canTarget(room, attackerId, targetId, now);
+  const valid = canTarget(room, attackerId, targetId);
   if (!valid.ok) {
     return valid;
   }
@@ -134,7 +125,6 @@ export function startInvasion(room, attackerId, targetId, now) {
     answer: challenge.answer,
     hint: challenge.hint,
     masked: challenge.masked,
-    attemptsLeft: room.settings.maxAttempts,
     resolved: false
   });
 
@@ -143,8 +133,7 @@ export function startInvasion(room, attackerId, targetId, now) {
     challenge: {
       targetId,
       hint: challenge.hint,
-      masked: challenge.masked,
-      attemptsLeft: room.settings.maxAttempts
+      masked: challenge.masked
     }
   };
 }
@@ -160,7 +149,6 @@ function resolveSuccess(room, challenge, now) {
   const steal = evaluateSteal(room, target.points);
   target.points -= steal;
   attacker.points += steal;
-  target.shieldUntilTs = now + room.settings.shieldSeconds * 1000;
 
   eliminateIfNeeded(target);
 
@@ -208,7 +196,6 @@ function resolveFailure(room, challenge, now) {
 
   attacker.points -= cost;
   target.points += cost;
-  target.shieldUntilTs = now + room.settings.shieldSeconds * 1000;
 
   eliminateIfNeeded(attacker);
 
@@ -265,15 +252,7 @@ export function submitAnswer(room, attackerId, answer, now) {
     return { ok: true, resolved: true, result };
   }
 
-  challenge.attemptsLeft -= 1;
-  if (challenge.attemptsLeft <= 0) {
-    challenge.resolved = true;
-    const result = resolveFailure(room, challenge, now);
-    closeChallenge(room, attackerId);
-    return { ok: true, resolved: true, result };
-  }
-
-  return { ok: true, resolved: false, attemptsLeft: challenge.attemptsLeft };
+  return { ok: true, resolved: false };
 }
 
 export function quitChallenge(room, attackerId, now) {

@@ -4,7 +4,8 @@ const socket = io(SOCKET_URL, { transports: ["websocket", "polling"] });
 const state = {
   me: null,
   room: null,
-  challenge: null
+  challenge: null,
+  updates: []
 };
 
 const els = {
@@ -17,6 +18,7 @@ const els = {
   roomCode: document.getElementById("room-code"),
   playersLobby: document.getElementById("players-lobby"),
   settings: document.getElementById("settings"),
+  updatesList: document.getElementById("updates-list"),
   myPoints: document.getElementById("my-points"),
   btnFinishGame: document.getElementById("btn-finish-game"),
   houses: document.getElementById("grid-houses"),
@@ -24,7 +26,6 @@ const els = {
   challengeHint: document.getElementById("challenge-hint"),
   challengeWord: document.getElementById("challenge-word"),
   challengeInput: document.getElementById("challenge-input"),
-  challengeAttempts: document.getElementById("challenge-attempts"),
   submitAnswer: document.getElementById("btn-submit-answer"),
   quitChallenge: document.getElementById("btn-quit-challenge"),
   resultText: document.getElementById("result-text"),
@@ -61,6 +62,18 @@ function getMyPlayer() {
   return state.room.players.find((p) => p.id === state.me);
 }
 
+function getPlayerName(playerId) {
+  if (!state.room) return "ALGUÉM";
+  const player = state.room.players.find((p) => p.id === playerId);
+  return player?.name || "ALGUÉM";
+}
+
+function addUpdate(message) {
+  state.updates.unshift(message);
+  state.updates = state.updates.slice(0, 6);
+  els.updatesList.innerHTML = state.updates.map((item) => `<li>${item}</li>`).join("");
+}
+
 function renderLobby() {
   const room = state.room;
   els.roomCode.textContent = room.code;
@@ -70,10 +83,10 @@ function renderLobby() {
 
   const s = room.settings;
   els.settings.innerHTML = `
-    <h3>Config</h3>
+    <h3>Instruções de jogo</h3>
     <div>Pontos iniciais: ${s.initialPoints}</div>
     <div>Meta: ${s.victoryGoal}</div>
-    <div>Tentativas: ${s.maxAttempts}</div>
+    <div>Tentativas: ilimitadas</div>
   `;
 
   const me = getMyPlayer();
@@ -91,14 +104,13 @@ function renderMap() {
     .map((p) => {
       const mine = p.id === state.me;
       const deadCls = p.status !== "alive" ? "dead" : "";
-      const shieldCls = p.shieldActive ? "shield" : "";
-      const disabled = mine || p.status !== "alive" || room.status !== "in_game" || p.shieldActive || state.challenge;
+      const disabled = mine || p.status !== "alive" || room.status !== "in_game" || state.challenge;
       return `
-        <article class="house ${deadCls} ${shieldCls}">
+        <article class="house ${deadCls}">
           <strong>${p.name}${mine ? " (Você)" : ""}</strong>
           <div>${p.points} pts</div>
-          <div>${p.shieldActive ? "Escudo ativo" : p.status}</div>
-          <button data-target="${p.id}" ${disabled ? "disabled" : ""}>Invadir</button>
+          <div>${p.status}</div>
+          <button data-target="${p.id}" ${disabled ? "disabled" : ""}>Pegar pontos</button>
         </article>
       `;
     })
@@ -175,6 +187,8 @@ socket.on("action:error", (msg) => {
 socket.on("room:joined", ({ playerId, room }) => {
   state.me = playerId;
   state.room = room;
+  state.updates = [];
+  els.updatesList.innerHTML = "";
   renderRoom();
 });
 
@@ -186,15 +200,13 @@ socket.on("room:update", (room) => {
 socket.on("challenge:start", (challenge) => {
   state.challenge = challenge;
   const target = state.room.players.find((p) => p.id === challenge.targetId);
-  els.challengeTarget.textContent = `Casa alvo: ${target ? target.name : "?"}`;
+  els.challengeTarget.textContent = `Casa alvo para pegar pontos: ${target ? target.name : "?"}`;
   els.challengeHint.textContent = `Dica: ${challenge.hint}`;
   els.challengeWord.textContent = challenge.masked;
-  els.challengeAttempts.textContent = challenge.attemptsLeft;
   showScreen("challenge");
 });
 
-socket.on("challenge:attempt", ({ attemptsLeft }) => {
-  els.challengeAttempts.textContent = attemptsLeft;
+socket.on("challenge:attempt", () => {
   showToast("Resposta incorreta");
 });
 
@@ -225,7 +237,17 @@ socket.on("attack:result", (result) => {
     return;
   }
   if (result.targetId === me.id) {
-    showToast(`Sua casa foi atacada (${result.success ? "-" + result.value : "+" + result.value})`);
+    const attackerName = getPlayerName(result.attackerId);
+    if (result.success) {
+      const msg = `${attackerName} tirou ${result.value} ponto(s) de você.`;
+      addUpdate(msg);
+      showToast(msg);
+      return;
+    }
+
+    const msg = `${attackerName} errou e te deu ${result.value} ponto(s).`;
+    addUpdate(msg);
+    showToast(msg);
   }
 });
 

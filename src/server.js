@@ -217,7 +217,7 @@ io.on("connection", (socket) => {
     }
 
     if (!response.resolved) {
-      socket.emit("challenge:attempt", { attemptsLeft: response.attemptsLeft });
+      socket.emit("challenge:attempt");
       return;
     }
 
