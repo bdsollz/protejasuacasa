@@ -12,10 +12,6 @@
         <h1>Proteja sua Casa</h1>
         <div id="statusLabel">Desconectado</div>
       </header>
-      <section class="panel updates-panel">
-        <h3>Atualizações</h3>
-        <ul id="updates-list"></ul>
-      </section>
 
       <section id="screen-entry" class="screen active">
         <h2>Entrar no jogo</h2>
@@ -39,6 +35,10 @@
       </section>
 
       <section id="screen-map" class="screen">
+        <section class="panel updates-panel">
+          <h3>Atualizações</h3>
+          <ul id="updates-list"></ul>
+        </section>
         <p>Seu cofre: <strong id="my-points">0</strong></p>
         <button id="btn-finish-game" class="full danger">Finalizar partida</button>
         <div id="grid-houses" class="grid"></div>
@@ -62,6 +62,14 @@
       <section id="screen-end" class="screen">
         <h2>Fim de jogo</h2>
         <p id="end-text"></p>
+        <div class="panel">
+          <h3>Quem pegou seus pontos</h3>
+          <ul id="end-personal-report"></ul>
+        </div>
+        <div class="panel">
+          <h3>Ranking de ataques</h3>
+          <ol id="end-global-ranking"></ol>
+        </div>
       </section>
 
       <p id="toast" class="toast"></p>

@@ -30,6 +30,8 @@ const els = {
   quitChallenge: document.getElementById("btn-quit-challenge"),
   resultText: document.getElementById("result-text"),
   endText: document.getElementById("end-text"),
+  endPersonalReport: document.getElementById("end-personal-report"),
+  endGlobalRanking: document.getElementById("end-global-ranking"),
   toast: document.getElementById("toast")
 };
 
@@ -87,6 +89,7 @@ function renderLobby() {
     <div>Pontos iniciais: ${s.initialPoints}</div>
     <div>Meta: ${s.victoryGoal}</div>
     <div>Tentativas: ilimitadas</div>
+    <div>Limite por ataque: 10 pontos</div>
   `;
 
   const me = getMyPlayer();
@@ -141,6 +144,34 @@ function renderRoom() {
   if (!state.challenge) {
     showScreen("map");
   }
+}
+
+function renderEndReports(report) {
+  if (!report) {
+    els.endPersonalReport.innerHTML = "<li>Sem dados.</li>";
+    els.endGlobalRanking.innerHTML = "<li>Sem dados.</li>";
+    return;
+  }
+
+  const myPersonal = report.personal?.[state.me];
+  if (!myPersonal || !myPersonal.byAttacker.length) {
+    els.endPersonalReport.innerHTML = "<li>Ninguém pegou seus pontos.</li>";
+  } else {
+    els.endPersonalReport.innerHTML = myPersonal.byAttacker
+      .map((item) => `<li>${item.attackerName}: ${item.points} ponto(s)</li>`)
+      .join("");
+  }
+
+  if (!report.ranking?.length) {
+    els.endGlobalRanking.innerHTML = "<li>Sem ataques registrados.</li>";
+    return;
+  }
+  els.endGlobalRanking.innerHTML = report.ranking
+    .map(
+      (row) =>
+        `<li>${row.playerName} - ${row.totalStolen} ponto(s) roubados (${row.successfulAttacks} acertos / ${row.failedAttacks} falhas)</li>`
+    )
+    .join("");
 }
 
 els.name.addEventListener("input", () => toUpperInput(els.name));
@@ -251,8 +282,9 @@ socket.on("attack:result", (result) => {
   }
 });
 
-socket.on("game:ended", ({ winnerId }) => {
+socket.on("game:ended", ({ winnerId, report }) => {
   const winner = state.room.players.find((p) => p.id === winnerId);
   els.endText.textContent = winner ? `Vencedor: ${winner.name}` : "Sem vencedor";
+  renderEndReports(report);
   showScreen("end");
 });

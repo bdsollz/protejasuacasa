@@ -190,7 +190,7 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const started = startInvasion(room, info.playerId, targetId, Date.now());
+    const started = startInvasion(room, info.playerId, targetId);
     if (!started.ok) {
       socket.emit("action:error", started.reason);
       return;

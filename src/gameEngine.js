@@ -1,9 +1,16 @@
 import { DEFAULT_SETTINGS } from "./config.js";
-import { drawChallenge } from "./challenges.js";
+import { buildChallengeDeck, drawFromDeck } from "./challenges.js";
+
+const HARD_STEAL_CAP = 10;
 
 function toInt(value, fallback) {
   const n = Number(value);
   return Number.isFinite(n) ? Math.floor(n) : fallback;
+}
+
+function incCounter(obj, key, value) {
+  const current = Number(obj[key] || 0);
+  obj[key] = current + value;
 }
 
 export function normalizeUpper(value) {
@@ -29,6 +36,8 @@ export function createRoom(roomCode, hostPlayer) {
     settings: sanitizeSettings(),
     players: new Map([[hostPlayer.id, hostPlayer]]),
     activeChallenges: new Map(),
+    challengeDeck: buildChallengeDeck(),
+    attackLog: [],
     lastAction: null
   };
 }
@@ -41,7 +50,12 @@ export function createPlayer({ id, name, socketId, isHost = false }) {
     isHost,
     points: 0,
     status: "alive",
-    result: null
+    result: null,
+    totalStolen: 0,
+    successfulAttacks: 0,
+    failedAttacks: 0,
+    receivedFrom: {},
+    lostTo: {}
   };
 }
 
@@ -66,24 +80,26 @@ export function roomSnapshot(room) {
 export function startGame(room) {
   room.status = "in_game";
   room.activeChallenges.clear();
+  room.challengeDeck = buildChallengeDeck();
+  room.attackLog = [];
+  room.lastAction = null;
 
   for (const player of room.players.values()) {
     player.points = room.settings.initialPoints;
     player.status = "alive";
     player.result = null;
+    player.totalStolen = 0;
+    player.successfulAttacks = 0;
+    player.failedAttacks = 0;
+    player.receivedFrom = {};
+    player.lostTo = {};
   }
 }
 
 function evaluateSteal(room, targetPoints) {
   const percentCap = Math.floor(targetPoints * room.settings.percentStealCap);
-  return Math.max(1, Math.min(room.settings.fixedStealCap, percentCap, room.settings.baseStealValue, targetPoints));
-}
-
-function eliminateIfNeeded(player) {
-  if (player.points <= 0) {
-    player.points = 0;
-    player.status = "eliminated";
-  }
+  const capByRules = Math.min(HARD_STEAL_CAP, room.settings.fixedStealCap, percentCap, room.settings.baseStealValue);
+  return Math.max(0, Math.min(capByRules, targetPoints));
 }
 
 export function canTarget(room, attackerId, targetId) {
@@ -96,14 +112,8 @@ export function canTarget(room, attackerId, targetId) {
   if (room.status !== "in_game") {
     return { ok: false, reason: "Partida não está em andamento" };
   }
-  if (attacker.status !== "alive") {
-    return { ok: false, reason: "Jogador eliminado" };
-  }
-  if (target.status !== "alive") {
-    return { ok: false, reason: "Alvo eliminado" };
-  }
   if (attackerId === targetId) {
-    return { ok: false, reason: "Não pode invadir a própria casa" };
+    return { ok: false, reason: "Não pode pegar pontos da própria casa" };
   }
   if (room.activeChallenges.has(attackerId)) {
     return { ok: false, reason: "Finalize seu desafio atual" };
@@ -112,13 +122,24 @@ export function canTarget(room, attackerId, targetId) {
   return { ok: true };
 }
 
-export function startInvasion(room, attackerId, targetId, now) {
+function drawChallenge(room) {
+  if (!room.challengeDeck.length) {
+    room.challengeDeck = buildChallengeDeck();
+  }
+  return drawFromDeck(room.challengeDeck);
+}
+
+export function startInvasion(room, attackerId, targetId) {
   const valid = canTarget(room, attackerId, targetId);
   if (!valid.ok) {
     return valid;
   }
 
-  const challenge = drawChallenge();
+  const challenge = drawChallenge(room);
+  if (!challenge) {
+    return { ok: false, reason: "Sem charadas disponíveis" };
+  }
+
   room.activeChallenges.set(attackerId, {
     attackerId,
     targetId,
@@ -150,7 +171,10 @@ function resolveSuccess(room, challenge, now) {
   target.points -= steal;
   attacker.points += steal;
 
-  eliminateIfNeeded(target);
+  attacker.totalStolen += steal;
+  attacker.successfulAttacks += 1;
+  incCounter(attacker.receivedFrom, target.id, steal);
+  incCounter(target.lostTo, attacker.id, steal);
 
   const payload = {
     attackerId: attacker.id,
@@ -160,6 +184,14 @@ function resolveSuccess(room, challenge, now) {
     attackerAfter: attacker.points,
     targetAfter: target.points
   };
+
+  room.attackLog.push({
+    type: "success",
+    attackerId: attacker.id,
+    targetId: target.id,
+    value: steal,
+    at: now
+  });
 
   attacker.result = payload;
   target.result = {
@@ -196,8 +228,7 @@ function resolveFailure(room, challenge, now) {
 
   attacker.points -= cost;
   target.points += cost;
-
-  eliminateIfNeeded(attacker);
+  attacker.failedAttacks += 1;
 
   const payload = {
     attackerId: attacker.id,
@@ -207,6 +238,14 @@ function resolveFailure(room, challenge, now) {
     attackerAfter: attacker.points,
     targetAfter: target.points
   };
+
+  room.attackLog.push({
+    type: "failure",
+    attackerId: attacker.id,
+    targetId: target.id,
+    value: cost,
+    at: now
+  });
 
   attacker.result = payload;
   target.result = {
@@ -267,18 +306,66 @@ export function quitChallenge(room, attackerId, now) {
   return { ok: true, resolved: true, result };
 }
 
+function buildReport(room, winnerId, reason) {
+  const players = [...room.players.values()];
+  const playersById = Object.fromEntries(players.map((p) => [p.id, p]));
+
+  const personal = Object.fromEntries(
+    players.map((p) => {
+      const entries = Object.entries(p.lostTo)
+        .map(([attackerId, points]) => ({
+          attackerId,
+          attackerName: playersById[attackerId]?.name || "ALGUEM",
+          points
+        }))
+        .sort((a, b) => b.points - a.points);
+
+      return [
+        p.id,
+        {
+          playerId: p.id,
+          playerName: p.name,
+          totalLost: entries.reduce((sum, item) => sum + item.points, 0),
+          byAttacker: entries
+        }
+      ];
+    })
+  );
+
+  const ranking = players
+    .map((p) => ({
+      playerId: p.id,
+      playerName: p.name,
+      totalStolen: p.totalStolen,
+      successfulAttacks: p.successfulAttacks,
+      failedAttacks: p.failedAttacks
+    }))
+    .sort((a, b) => {
+      if (b.totalStolen !== a.totalStolen) return b.totalStolen - a.totalStolen;
+      if (b.successfulAttacks !== a.successfulAttacks) return b.successfulAttacks - a.successfulAttacks;
+      return a.failedAttacks - b.failedAttacks;
+    });
+
+  return {
+    winnerId,
+    reason,
+    ranking,
+    personal
+  };
+}
+
 export function evaluateGameOver(room) {
-  const alive = [...room.players.values()].filter((p) => p.status === "alive");
-  const winnerByGoal = alive.find((p) => p.points >= room.settings.victoryGoal);
+  const players = [...room.players.values()];
+  const winnerByGoal = players.find((p) => p.points >= room.settings.victoryGoal);
 
   if (winnerByGoal) {
     room.status = "finished";
-    return { finished: true, winnerId: winnerByGoal.id, reason: "goal" };
-  }
-
-  if (alive.length <= 1) {
-    room.status = "finished";
-    return { finished: true, winnerId: alive[0]?.id ?? null, reason: "last_alive" };
+    return {
+      finished: true,
+      winnerId: winnerByGoal.id,
+      reason: "goal",
+      report: buildReport(room, winnerByGoal.id, "goal")
+    };
   }
 
   return { finished: false };
@@ -292,10 +379,14 @@ export function finishGameByHost(room, hostId) {
     return { ok: false, reason: "A partida não está em andamento" };
   }
 
-  const alive = [...room.players.values()]
-    .filter((p) => p.status === "alive")
-    .sort((a, b) => b.points - a.points);
-
+  const leader = [...room.players.values()].sort((a, b) => b.points - a.points)[0] || null;
   room.status = "finished";
-  return { ok: true, finished: true, winnerId: alive[0]?.id ?? null, reason: "host_forced" };
+
+  return {
+    ok: true,
+    finished: true,
+    winnerId: leader?.id ?? null,
+    reason: "host_forced",
+    report: buildReport(room, leader?.id ?? null, "host_forced")
+  };
 }

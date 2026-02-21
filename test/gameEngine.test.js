@@ -33,11 +33,11 @@ test("normaliza textos para maiúsculo", () => {
   assert.equal(normalizeUpper(" abc12 "), "ABC12");
 });
 
-test("roubo respeita teto percentual do alvo", () => {
+test("roubo respeita limite maximo de 10 por ataque", () => {
   const room = setupRoom();
   room.players.get("p2").points = 60;
 
-  const started = startInvasion(room, "p1", "p2", Date.now());
+  const started = startInvasion(room, "p1", "p2");
   assert.equal(started.ok, true);
 
   const challenge = room.activeChallenges.get("p1");
@@ -45,15 +45,15 @@ test("roubo respeita teto percentual do alvo", () => {
   assert.equal(result.ok, true);
   assert.equal(result.resolved, true);
 
-  assert.equal(result.result.value, 12);
-  assert.equal(room.players.get("p1").points, 112);
-  assert.equal(room.players.get("p2").points, 48);
+  assert.equal(result.result.value, 10);
+  assert.equal(room.players.get("p1").points, 110);
+  assert.equal(room.players.get("p2").points, 50);
 });
 
-test("erro não consome tentativas (ilimitado)", () => {
+test("erro nao consome tentativas", () => {
   const room = setupRoom();
 
-  const started = startInvasion(room, "p1", "p2", Date.now());
+  const started = startInvasion(room, "p1", "p2");
   assert.equal(started.ok, true);
 
   const response1 = submitAnswer(room, "p1", "ERRADO", Date.now());
@@ -68,7 +68,7 @@ test("erro não consome tentativas (ilimitado)", () => {
 test("sair da casa resolve como falha", () => {
   const room = setupRoom();
 
-  const started = startInvasion(room, "p1", "p2", Date.now());
+  const started = startInvasion(room, "p1", "p2");
   assert.equal(started.ok, true);
 
   const response = quitChallenge(room, "p1", Date.now());
@@ -77,33 +77,55 @@ test("sair da casa resolve como falha", () => {
   assert.equal(response.result.success, false);
 });
 
-test("pode pegar pontos da mesma casa várias vezes seguidas", () => {
+test("pode pegar pontos da mesma casa varias vezes seguidas", () => {
   const room = setupRoom();
 
-  const first = startInvasion(room, "p1", "p2", Date.now());
+  const first = startInvasion(room, "p1", "p2");
   assert.equal(first.ok, true);
   const challenge1 = room.activeChallenges.get("p1");
   const result1 = submitAnswer(room, "p1", challenge1.answer, Date.now());
   assert.equal(result1.resolved, true);
 
-  const second = startInvasion(room, "p1", "p2", Date.now());
+  const second = startInvasion(room, "p1", "p2");
   assert.equal(second.ok, true);
 });
 
-test("host pode finalizar partida antecipadamente", () => {
+test("charadas nao se repetem enquanto o baralho nao acabar", () => {
+  const room = setupRoom();
+  room.challengeDeck = [
+    { answer: "ALFA", hint: "A", masked: "A _ F A" },
+    { answer: "BETA", hint: "B", masked: "B _ T A" }
+  ];
+
+  const first = startInvasion(room, "p1", "p2");
+  assert.equal(first.ok, true);
+  const firstAnswer = room.activeChallenges.get("p1").answer;
+  submitAnswer(room, "p1", firstAnswer, Date.now());
+
+  const second = startInvasion(room, "p1", "p2");
+  assert.equal(second.ok, true);
+  const secondAnswer = room.activeChallenges.get("p1").answer;
+
+  assert.notEqual(firstAnswer, secondAnswer);
+});
+
+test("host pode finalizar partida com relatorio", () => {
   const room = setupRoom();
 
   const result = finishGameByHost(room, "p1");
   assert.equal(result.ok, true);
   assert.equal(result.finished, true);
   assert.equal(room.status, "finished");
+  assert.ok(Array.isArray(result.report.ranking));
+  assert.ok(result.report.personal.p1);
 });
 
-test("encerra quando alguém bate meta", () => {
+test("encerra quando alguem bate meta", () => {
   const room = setupRoom();
   room.players.get("p1").points = room.settings.victoryGoal;
 
   const result = evaluateGameOver(room);
   assert.equal(result.finished, true);
   assert.equal(result.winnerId, "p1");
+  assert.ok(result.report);
 });
