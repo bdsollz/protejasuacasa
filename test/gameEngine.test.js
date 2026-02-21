@@ -3,9 +3,11 @@ import assert from "node:assert/strict";
 import {
   createPlayer,
   createRoom,
+  finishGameByHost,
   startGame,
   startPlanning,
   planInvasion,
+  quitChallenge,
   startExecution,
   submitAnswer,
   sanitizeSettings
@@ -70,4 +72,26 @@ test("falha aplica custo sem zerar atacante por penalidade", () => {
   assert.equal(response.result.value, 2);
   assert.equal(room.players.get("p1").points, 1);
   assert.equal(room.players.get("p2").points, 102);
+});
+
+test("sair da casa resolve como falha", () => {
+  const room = setupRoom();
+
+  startPlanning(room, Date.now(), 5000);
+  assert.equal(planInvasion(room, "p1", "p2").ok, true);
+  startExecution(room, Date.now(), 20000);
+
+  const response = quitChallenge(room, "p1");
+  assert.equal(response.ok, true);
+  assert.equal(response.resolved, true);
+  assert.equal(response.result.success, false);
+});
+
+test("host pode finalizar partida antecipadamente", () => {
+  const room = setupRoom();
+
+  const result = finishGameByHost(room, "p1");
+  assert.equal(result.ok, true);
+  assert.equal(result.finished, true);
+  assert.equal(room.status, "finished");
 });

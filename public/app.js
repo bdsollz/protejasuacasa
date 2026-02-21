@@ -22,13 +22,16 @@ const els = {
   hudPhase: document.getElementById("hud-phase"),
   hudTimer: document.getElementById("hud-timer"),
   myPoints: document.getElementById("my-points"),
+  btnFinishGame: document.getElementById("btn-finish-game"),
   houses: document.getElementById("grid-houses"),
   challengeTarget: document.getElementById("challenge-target"),
+  challengeHint: document.getElementById("challenge-hint"),
   challengeWord: document.getElementById("challenge-word"),
   challengeInput: document.getElementById("challenge-input"),
   challengeAttempts: document.getElementById("challenge-attempts"),
   challengeTime: document.getElementById("challenge-time"),
   submitAnswer: document.getElementById("btn-submit-answer"),
+  quitChallenge: document.getElementById("btn-quit-challenge"),
   resultText: document.getElementById("result-text"),
   endText: document.getElementById("end-text"),
   toast: document.getElementById("toast")
@@ -94,6 +97,7 @@ function renderMap() {
   els.hudRound.textContent = `Rodada ${room.round}`;
   els.hudPhase.textContent = phaseLabel(room.phase);
   els.myPoints.textContent = me ? me.points : 0;
+  els.btnFinishGame.style.display = me && me.isHost ? "block" : "none";
 
   els.houses.innerHTML = room.players
     .map((p) => {
@@ -172,9 +176,17 @@ els.btnStart.addEventListener("click", () => {
   socket.emit("game:start");
 });
 
+els.btnFinishGame.addEventListener("click", () => {
+  socket.emit("game:finish");
+});
+
 els.submitAnswer.addEventListener("click", () => {
   socket.emit("challenge:answer", { answer: els.challengeInput.value });
   els.challengeInput.value = "";
+});
+
+els.quitChallenge.addEventListener("click", () => {
+  socket.emit("challenge:quit");
 });
 
 socket.on("connect", () => {
@@ -208,6 +220,7 @@ socket.on("challenge:start", (challenge) => {
   state.challenge = challenge;
   const target = state.room.players.find((p) => p.id === challenge.targetId);
   els.challengeTarget.textContent = `Casa alvo: ${target ? target.name : "?"}`;
+  els.challengeHint.textContent = `Dica: ${challenge.hint}`;
   els.challengeWord.textContent = challenge.masked;
   els.challengeAttempts.textContent = challenge.attemptsLeft;
   els.challengeTime.textContent = Math.max(0, Math.ceil((challenge.deadline - Date.now()) / 1000));

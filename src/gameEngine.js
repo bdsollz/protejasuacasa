@@ -179,6 +179,7 @@ export function startExecution(room, now, ms) {
       attackerId,
       targetId: target.id,
       answer: challenge.answer,
+      hint: challenge.hint,
       masked: challenge.masked,
       attemptsLeft: room.settings.maxAttempts,
       startedAt: now,
@@ -296,6 +297,21 @@ function resolveFailure(room, challenge) {
   return payload;
 }
 
+export function quitChallenge(room, attackerId) {
+  if (room.phase !== "execution") {
+    return { ok: false, reason: "Não está em fase de desafio" };
+  }
+
+  const challenge = room.activeChallenges.get(attackerId);
+  if (!challenge || challenge.resolved) {
+    return { ok: false, reason: "Desafio não encontrado" };
+  }
+
+  challenge.resolved = true;
+  const result = resolveFailure(room, challenge);
+  return { ok: true, resolved: true, result };
+}
+
 export function submitAnswer(room, attackerId, answer, now) {
   if (room.phase !== "execution") {
     return { ok: false, reason: "Não está em fase de desafio" };
@@ -368,4 +384,22 @@ export function resolveRoundEnd(room) {
 
   room.round += 1;
   return { finished: false };
+}
+
+export function finishGameByHost(room, hostId) {
+  if (room.hostId !== hostId) {
+    return { ok: false, reason: "Só o host pode finalizar a partida" };
+  }
+  if (room.status !== "in_game") {
+    return { ok: false, reason: "A partida não está em andamento" };
+  }
+
+  const alive = [...room.players.values()]
+    .filter((p) => p.status === "alive")
+    .sort((a, b) => b.points - a.points);
+
+  room.status = "finished";
+  room.phase = "finished";
+  room.phaseEndsAt = null;
+  return { ok: true, finished: true, winnerId: alive[0]?.id ?? null, reason: "host_forced" };
 }

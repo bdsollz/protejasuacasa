@@ -1,19 +1,19 @@
 const WORDS = [
-  "PREFEITURA",
-  "GELADEIRA",
-  "BIBLIOTECA",
-  "COMPUTADOR",
-  "BRINQUEDO",
-  "CHOCOLATE",
-  "JANELA",
-  "ELEFANTE",
-  "TELEFONE",
-  "HOSPITAL",
-  "ABACAXI",
-  "CADERNO",
-  "MOTOQUEIRO",
-  "CAMINHAO",
-  "ESCULTURA"
+  { answer: "PREFEITURA", hint: "Órgão do governo municipal" },
+  { answer: "GELADEIRA", hint: "Eletrodoméstico que mantém alimentos frios" },
+  { answer: "BIBLIOTECA", hint: "Lugar com livros para estudo e empréstimo" },
+  { answer: "COMPUTADOR", hint: "Máquina usada para tarefas digitais" },
+  { answer: "BRINQUEDO", hint: "Objeto usado para diversão infantil" },
+  { answer: "CHOCOLATE", hint: "Doce feito a partir do cacau" },
+  { answer: "JANELA", hint: "Abertura em parede para entrada de luz e ar" },
+  { answer: "ELEFANTE", hint: "Animal grande com tromba" },
+  { answer: "TELEFONE", hint: "Aparelho para chamadas" },
+  { answer: "HOSPITAL", hint: "Local de atendimento médico" },
+  { answer: "ABACAXI", hint: "Fruta tropical de casca espinhosa" },
+  { answer: "CADERNO", hint: "Item escolar para anotações" },
+  { answer: "MOTOQUEIRO", hint: "Pessoa que conduz moto" },
+  { answer: "CAMINHAO", hint: "Veículo grande de carga" },
+  { answer: "ESCULTURA", hint: "Obra de arte tridimensional" }
 ];
 
 function maskWord(word) {
@@ -22,9 +22,10 @@ function maskWord(word) {
 }
 
 export function drawChallenge() {
-  const answer = WORDS[Math.floor(Math.random() * WORDS.length)];
+  const selected = WORDS[Math.floor(Math.random() * WORDS.length)];
   return {
-    answer,
-    masked: maskWord(answer)
+    answer: selected.answer,
+    hint: selected.hint,
+    masked: maskWord(selected.answer)
   };
 }

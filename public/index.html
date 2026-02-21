@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Casas e Saque</title>
+    <title>Proteja sua Casa</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <main class="app">
       <header class="topbar">
-        <h1>Casas e Saque</h1>
+        <h1>Proteja sua Casa</h1>
         <div id="statusLabel">Desconectado</div>
       </header>
 
@@ -41,17 +41,20 @@
           <span id="hud-timer">0s</span>
         </div>
         <p>Seu cofre: <strong id="my-points">0</strong></p>
+        <button id="btn-finish-game" class="full danger">Finalizar partida</button>
         <div id="grid-houses" class="grid"></div>
       </section>
 
       <section id="screen-challenge" class="screen">
         <h2>Invasão</h2>
         <p id="challenge-target"></p>
+        <p id="challenge-hint"></p>
         <p id="challenge-word" class="word"></p>
         <label>Resposta<input id="challenge-input" autocomplete="off" /></label>
         <p>Tentativas: <strong id="challenge-attempts">0</strong></p>
         <p>Tempo: <strong id="challenge-time">0</strong>s</p>
         <button id="btn-submit-answer" class="full">Enviar</button>
+        <button id="btn-quit-challenge" class="full danger">Sair da casa</button>
       </section>
 
       <section id="screen-result" class="screen">

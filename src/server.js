@@ -6,7 +6,9 @@ import {
   createPlayer,
   createRoom,
   finalizeExecution,
+  finishGameByHost,
   planInvasion,
+  quitChallenge,
   resolveRoundEnd,
   roomSnapshot,
   sanitizeSettings,
@@ -84,6 +86,7 @@ function scheduleExecution(room) {
     io.to(attacker.socketId).emit("challenge:start", {
       targetId: challenge.targetId,
       masked: challenge.masked,
+      hint: challenge.hint,
       attemptsLeft: challenge.attemptsLeft,
       deadline: challenge.deadline
     });
@@ -259,6 +262,27 @@ io.on("connection", (socket) => {
     emitRoom(room);
   });
 
+  socket.on("game:finish", () => {
+    const info = socketIndex.get(socket.id);
+    if (!info) {
+      return;
+    }
+    const room = getRoom(info.roomCode);
+    if (!room) {
+      return;
+    }
+
+    const result = finishGameByHost(room, info.playerId);
+    if (!result.ok) {
+      socket.emit("action:error", result.reason);
+      return;
+    }
+
+    clearRoomTimers(room.code);
+    emitRoom(room);
+    io.to(room.code).emit("game:ended", result);
+  });
+
   socket.on("challenge:answer", ({ answer }) => {
     const info = socketIndex.get(socket.id);
     if (!info) {
@@ -277,6 +301,25 @@ io.on("connection", (socket) => {
 
     if (!response.resolved) {
       socket.emit("challenge:attempt", { attemptsLeft: response.attemptsLeft });
+      return;
+    }
+
+    socket.emit("challenge:resolved", response.result);
+  });
+
+  socket.on("challenge:quit", () => {
+    const info = socketIndex.get(socket.id);
+    if (!info) {
+      return;
+    }
+    const room = getRoom(info.roomCode);
+    if (!room) {
+      return;
+    }
+
+    const response = quitChallenge(room, info.playerId);
+    if (!response.ok) {
+      socket.emit("action:error", response.reason);
       return;
     }
 
