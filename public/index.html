@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Casas e Saque</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <h1>Casas e Saque</h1>
+        <div id="statusLabel">Desconectado</div>
+      </header>
+
+      <section id="screen-entry" class="screen active">
+        <h2>Entrar no jogo</h2>
+        <label>Seu nome<input id="input-name" maxlength="20" /></label>
+        <label>Código da sala<input id="input-code" maxlength="6" /></label>
+        <div class="row">
+          <button id="btn-create">Criar sala</button>
+          <button id="btn-join">Entrar</button>
+        </div>
+      </section>
+
+      <section id="screen-lobby" class="screen">
+        <h2>Lobby</h2>
+        <p>Código: <strong id="room-code">-</strong></p>
+        <div id="settings" class="panel"></div>
+        <div class="panel">
+          <h3>Jogadores</h3>
+          <ul id="players-lobby"></ul>
+        </div>
+        <button id="btn-start" class="full">Iniciar partida</button>
+      </section>
+
+      <section id="screen-map" class="screen">
+        <div class="hud">
+          <span id="hud-round">Rodada 0</span>
+          <span id="hud-phase">-</span>
+          <span id="hud-timer">0s</span>
+        </div>
+        <p>Seu cofre: <strong id="my-points">0</strong></p>
+        <div id="grid-houses" class="grid"></div>
+      </section>
+
+      <section id="screen-challenge" class="screen">
+        <h2>Invasão</h2>
+        <p id="challenge-target"></p>
+        <p id="challenge-word" class="word"></p>
+        <label>Resposta<input id="challenge-input" autocomplete="off" /></label>
+        <p>Tentativas: <strong id="challenge-attempts">0</strong></p>
+        <p>Tempo: <strong id="challenge-time">0</strong>s</p>
+        <button id="btn-submit-answer" class="full">Enviar</button>
+      </section>
+
+      <section id="screen-result" class="screen">
+        <h2>Resultado</h2>
+        <p id="result-text"></p>
+      </section>
+
+      <section id="screen-end" class="screen">
+        <h2>Fim de jogo</h2>
+        <p id="end-text"></p>
+      </section>
+
+      <p id="toast" class="toast"></p>
+    </main>
+
+    <script src="/config.js"></script>
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" crossorigin="anonymous"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>
