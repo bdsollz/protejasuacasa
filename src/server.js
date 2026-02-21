@@ -37,6 +37,47 @@ const rooms = new Map();
 const socketIndex = new Map();
 const reconnectTimers = new Map();
 
+function hasWhitespace(value) {
+  return /\s/.test(String(value || ""));
+}
+
+function getSocketAddress(socket) {
+  const raw = socket.handshake.address || "";
+  return String(raw).replace("::ffff:", "");
+}
+
+function getNetworkKey(socket) {
+  const addr = getSocketAddress(socket);
+  if (addr.includes(".")) {
+    const parts = addr.split(".");
+    return parts.length >= 3 ? `${parts[0]}.${parts[1]}.${parts[2]}` : addr;
+  }
+  return addr.split(":").slice(0, 4).join(":");
+}
+
+function parseLocation(input) {
+  const lat = Number(input?.lat);
+  const lon = Number(input?.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    return null;
+  }
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+    return null;
+  }
+  return { lat, lon };
+}
+
+function distanceKm(a, b) {
+  const R = 6371;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLon = ((b.lon - a.lon) * Math.PI) / 180;
+  const x =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+  return R * c;
+}
+
 function getRoom(code) {
   return rooms.get(normalizeUpper(code));
 }
@@ -55,18 +96,39 @@ function cancelReconnectTimer(roomCode, playerId) {
   reconnectTimers.delete(key);
 }
 
-function activeRoomsSnapshot() {
-  return [...rooms.values()]
+function activeRoomsSnapshot(socket = null, filters = {}) {
+  const requesterNetworkKey = socket ? getNetworkKey(socket) : null;
+  const requesterLocation = parseLocation(filters.location);
+  const onlySameNetwork = Boolean(filters.sameNetwork);
+
+  const items = [...rooms.values()]
     .filter((room) => room.status === "in_game")
+    .filter((room) => {
+      if (!onlySameNetwork) {
+        return true;
+      }
+      if (!requesterNetworkKey || !room.hostNetworkKey) {
+        return false;
+      }
+      return requesterNetworkKey === room.hostNetworkKey;
+    })
     .map((room) => ({
       code: room.code,
       players: room.players.size,
-      connectedPlayers: [...room.players.values()].filter((p) => p.connected).length
+      connectedPlayers: [...room.players.values()].filter((p) => p.connected).length,
+      distanceKm: requesterLocation && room.location ? distanceKm(requesterLocation, room.location) : null
     }));
+
+  return items.sort((a, b) => {
+    if (a.distanceKm == null && b.distanceKm == null) return 0;
+    if (a.distanceKm == null) return 1;
+    if (b.distanceKm == null) return -1;
+    return a.distanceKm - b.distanceKm;
+  });
 }
 
-function emitActiveRooms(targetSocket = null) {
-  const payload = activeRoomsSnapshot();
+function emitActiveRooms(targetSocket = null, filters = {}) {
+  const payload = activeRoomsSnapshot(targetSocket, filters);
   if (targetSocket) {
     targetSocket.emit("rooms:active", payload);
     return;
@@ -170,11 +232,15 @@ function checkGameEnd(room) {
 io.on("connection", (socket) => {
   emitActiveRooms(socket);
 
-  socket.on("rooms:list", () => {
-    emitActiveRooms(socket);
+  socket.on("rooms:list", (filters = {}) => {
+    emitActiveRooms(socket, filters);
   });
 
-  socket.on("room:create", ({ name }) => {
+  socket.on("room:create", ({ name, location }) => {
+    if (hasWhitespace(name)) {
+      socket.emit("action:error", "Nome não pode ter espaços");
+      return;
+    }
     const playerName = normalizeUpper(name);
     if (!playerName) {
       socket.emit("action:error", "Nome é obrigatório");
@@ -186,6 +252,8 @@ io.on("connection", (socket) => {
     player.reconnectKey = genReconnectKey();
 
     const room = createRoom(roomCode, player);
+    room.hostNetworkKey = getNetworkKey(socket);
+    room.location = parseLocation(location);
     rooms.set(roomCode, room);
 
     bindSocketToPlayer(room, player, socket);
@@ -200,6 +268,14 @@ io.on("connection", (socket) => {
   });
 
   socket.on("room:join", ({ code, name }) => {
+    if (hasWhitespace(code)) {
+      socket.emit("action:error", "Código da sala não pode ter espaços");
+      return;
+    }
+    if (hasWhitespace(name)) {
+      socket.emit("action:error", "Nome não pode ter espaços");
+      return;
+    }
     const room = getRoom(code);
     const playerName = normalizeUpper(name);
 
@@ -211,13 +287,17 @@ io.on("connection", (socket) => {
       socket.emit("action:error", "Nome é obrigatório");
       return;
     }
-    if (room.status !== "lobby") {
-      socket.emit("action:error", "Partida já iniciada");
+    if (room.status === "finished") {
+      socket.emit("action:error", "Partida finalizada");
       return;
     }
 
     const player = createPlayer({ id: genPlayerId(), name: playerName, socketId: socket.id });
     player.reconnectKey = genReconnectKey();
+    if (room.status === "in_game") {
+      player.points = room.settings.initialPoints;
+      player.status = "alive";
+    }
 
     room.players.set(player.id, player);
     bindSocketToPlayer(room, player, socket);
@@ -232,6 +312,10 @@ io.on("connection", (socket) => {
   });
 
   socket.on("room:reconnect", ({ code, playerId, reconnectKey }) => {
+    if (hasWhitespace(code)) {
+      socket.emit("room:reconnect-failed");
+      return;
+    }
     const room = getRoom(code);
     if (!room) {
       socket.emit("room:reconnect-failed");
@@ -267,6 +351,25 @@ io.on("connection", (socket) => {
 
     room.settings = sanitizeSettings({ ...room.settings, ...settings });
     emitRoom(room);
+  });
+
+  socket.on("room:set-location", ({ location }) => {
+    const info = socketIndex.get(socket.id);
+    if (!info) {
+      return;
+    }
+    const room = getRoom(info.roomCode);
+    if (!room) {
+      return;
+    }
+
+    const player = room.players.get(info.playerId);
+    if (!player || !player.isHost) {
+      return;
+    }
+
+    room.location = parseLocation(location);
+    emitActiveRooms();
   });
 
   socket.on("room:leave", () => {
@@ -314,6 +417,7 @@ io.on("connection", (socket) => {
 
     startGame(room);
     emitRoom(room);
+    io.to(room.code).emit("game:started");
   });
 
   socket.on("game:finish", () => {

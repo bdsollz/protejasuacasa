@@ -8,7 +8,10 @@ const state = {
   reconnectKey: null,
   room: null,
   challenge: null,
-  updates: []
+  updates: [],
+  location: null,
+  preferSameNetwork: false,
+  manualWaiting: false
 };
 
 const els = {
@@ -17,6 +20,8 @@ const els = {
   name: document.getElementById("input-name"),
   code: document.getElementById("input-code"),
   activeRoomsList: document.getElementById("active-rooms-list"),
+  btnEnableLocation: document.getElementById("btn-enable-location"),
+  checkSameNetwork: document.getElementById("check-same-network"),
   btnCreate: document.getElementById("btn-create"),
   btnJoin: document.getElementById("btn-join"),
   btnStart: document.getElementById("btn-start"),
@@ -61,7 +66,39 @@ function showToast(message) {
 }
 
 function toUpperInput(el) {
-  el.value = (el.value || "").toUpperCase();
+  el.value = (el.value || "").toUpperCase().replace(/\s+/g, "");
+}
+
+function roomsListFilters() {
+  return {
+    sameNetwork: Boolean(state.preferSameNetwork),
+    location: state.location
+  };
+}
+
+function refreshRoomsList() {
+  socket.emit("rooms:list", roomsListFilters());
+}
+
+function askLocation() {
+  if (!navigator.geolocation) {
+    showToast("GPS não disponível neste dispositivo.");
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      state.location = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+      showToast("Localização ativada.");
+      if (state.room?.status === "lobby") {
+        socket.emit("room:set-location", { location: state.location });
+      }
+      refreshRoomsList();
+    },
+    () => {
+      showToast("Não foi possível obter GPS.");
+    },
+    { enableHighAccuracy: true, maximumAge: 30000, timeout: 10000 }
+  );
 }
 
 function saveSession() {
@@ -129,7 +166,7 @@ function renderActiveRooms(rooms) {
   els.activeRoomsList.innerHTML = rooms
     .map(
       (room) =>
-        `<li><button data-code="${room.code}">Entrar em ${room.code} (${room.connectedPlayers}/${room.players})</button></li>`
+        `<li><button data-code="${room.code}">Entrar em ${room.code} (${room.connectedPlayers}/${room.players})${room.distanceKm != null ? ` - ${room.distanceKm.toFixed(1)} km` : ""}</button></li>`
     )
     .join("");
 
@@ -242,7 +279,7 @@ function renderRoom() {
   }
 
   if (state.room.status === "in_game") {
-    if (screens.lobby.classList.contains("active")) {
+    if (state.manualWaiting && screens.lobby.classList.contains("active")) {
       renderLobby();
       return;
     }
@@ -274,9 +311,16 @@ function connectFromSavedSession() {
 els.name.addEventListener("input", () => toUpperInput(els.name));
 els.code.addEventListener("input", () => toUpperInput(els.code));
 els.challengeInput.addEventListener("input", () => toUpperInput(els.challengeInput));
+els.checkSameNetwork.addEventListener("change", () => {
+  state.preferSameNetwork = els.checkSameNetwork.checked;
+  refreshRoomsList();
+});
+els.btnEnableLocation.addEventListener("click", () => {
+  askLocation();
+});
 
 els.btnCreate.addEventListener("click", () => {
-  socket.emit("room:create", { name: els.name.value });
+  socket.emit("room:create", { name: els.name.value, location: state.location });
 });
 
 els.btnJoin.addEventListener("click", () => {
@@ -288,6 +332,7 @@ els.btnStart.addEventListener("click", () => {
 });
 
 els.btnBackGame.addEventListener("click", () => {
+  state.manualWaiting = false;
   showScreen("map");
   renderRoom();
 });
@@ -305,16 +350,19 @@ els.btnLeaveRoom.addEventListener("click", () => {
 });
 
 els.btnOpenWaitingMap.addEventListener("click", () => {
+  state.manualWaiting = true;
   renderLobby();
   showScreen("lobby");
 });
 
 els.btnOpenWaitingChallenge.addEventListener("click", () => {
+  state.manualWaiting = true;
   renderLobby();
   showScreen("lobby");
 });
 
 els.btnOpenWaitingResult.addEventListener("click", () => {
+  state.manualWaiting = true;
   renderLobby();
   showScreen("lobby");
 });
@@ -334,7 +382,7 @@ els.quitChallenge.addEventListener("click", () => {
 
 socket.on("connect", () => {
   els.statusLabel.textContent = "Conectado";
-  socket.emit("rooms:list");
+  refreshRoomsList();
   connectFromSavedSession();
 });
 
@@ -363,15 +411,27 @@ socket.on("room:joined", ({ playerId, reconnectKey, room }) => {
   state.room = room;
   state.updates = [];
   state.challenge = null;
+  state.manualWaiting = false;
   els.updatesList.innerHTML = "";
   saveSession();
   renderRoom();
 });
 
 socket.on("room:update", (room) => {
+  const becameInGame = state.room?.status !== "in_game" && room.status === "in_game";
   state.room = room;
+  if (becameInGame) {
+    state.manualWaiting = false;
+  }
   saveSession();
   renderRoom();
+});
+
+socket.on("game:started", () => {
+  state.manualWaiting = false;
+  if (!state.challenge) {
+    showScreen("map");
+  }
 });
 
 socket.on("challenge:start", (challenge) => {

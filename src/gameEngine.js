@@ -38,7 +38,9 @@ export function createRoom(roomCode, hostPlayer) {
     activeChallenges: new Map(),
     challengeDeck: buildChallengeDeck(),
     attackLog: [],
-    lastAction: null
+    lastAction: null,
+    hostNetworkKey: null,
+    location: null
   };
 }
 
@@ -76,7 +78,8 @@ export function roomSnapshot(room) {
     status: room.status,
     settings: room.settings,
     players,
-    lastAction: room.lastAction
+    lastAction: room.lastAction,
+    location: room.location
   };
 }
 
@@ -101,9 +104,12 @@ export function startGame(room) {
 }
 
 function evaluateSteal(room, targetPoints) {
+  if (targetPoints <= 0) {
+    return 0;
+  }
   const percentCap = Math.floor(targetPoints * room.settings.percentStealCap);
   const capByRules = Math.min(HARD_STEAL_CAP, room.settings.fixedStealCap, percentCap, room.settings.baseStealValue);
-  return Math.max(0, Math.min(capByRules, targetPoints));
+  return Math.max(1, Math.min(capByRules, targetPoints));
 }
 
 export function canTarget(room, attackerId, targetId) {
