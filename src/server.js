@@ -3,6 +3,8 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import { customAlphabet, nanoid } from "nanoid";
 import {
+  addPlayerToRunningGame,
+  buildRankingSnapshot,
   createPlayer,
   createRoom,
   evaluateGameOver,
@@ -42,40 +44,38 @@ function hasWhitespace(value) {
 }
 
 function getSocketAddress(socket) {
-  const raw = socket.handshake.address || "";
-  return String(raw).replace("::ffff:", "");
+  const xff = socket.handshake.headers["x-forwarded-for"];
+  if (typeof xff === "string" && xff.trim()) {
+    return xff.split(",")[0].trim();
+  }
+
+  const cf = socket.handshake.headers["cf-connecting-ip"];
+  if (typeof cf === "string" && cf.trim()) {
+    return cf.trim();
+  }
+
+  return String(socket.handshake.address || "").replace("::ffff:", "");
 }
 
 function getNetworkKey(socket) {
   const addr = getSocketAddress(socket);
+  if (!addr) {
+    return null;
+  }
+
   if (addr.includes(".")) {
     const parts = addr.split(".");
-    return parts.length >= 3 ? `${parts[0]}.${parts[1]}.${parts[2]}` : addr;
+    if (parts.length >= 3) {
+      return `${parts[0]}.${parts[1]}.${parts[2]}`;
+    }
+    return addr;
   }
-  return addr.split(":").slice(0, 4).join(":");
-}
 
-function parseLocation(input) {
-  const lat = Number(input?.lat);
-  const lon = Number(input?.lon);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-    return null;
+  const parts = addr.split(":").filter(Boolean);
+  if (!parts.length) {
+    return addr;
   }
-  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
-    return null;
-  }
-  return { lat, lon };
-}
-
-function distanceKm(a, b) {
-  const R = 6371;
-  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-  const dLon = ((b.lon - a.lon) * Math.PI) / 180;
-  const x =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
-  const c = 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
-  return R * c;
+  return parts.slice(0, 4).join(":");
 }
 
 function getRoom(code) {
@@ -98,33 +98,24 @@ function cancelReconnectTimer(roomCode, playerId) {
 
 function activeRoomsSnapshot(socket = null, filters = {}) {
   const requesterNetworkKey = socket ? getNetworkKey(socket) : null;
-  const requesterLocation = parseLocation(filters.location);
   const onlySameNetwork = Boolean(filters.sameNetwork);
 
-  const items = [...rooms.values()]
+  return [...rooms.values()]
     .filter((room) => room.status === "in_game")
     .filter((room) => {
       if (!onlySameNetwork) {
         return true;
       }
-      if (!requesterNetworkKey || !room.hostNetworkKey) {
+      if (!requesterNetworkKey) {
         return false;
       }
-      return requesterNetworkKey === room.hostNetworkKey;
+      return [...room.players.values()].some((p) => p.networkKey && p.networkKey === requesterNetworkKey);
     })
     .map((room) => ({
       code: room.code,
       players: room.players.size,
-      connectedPlayers: [...room.players.values()].filter((p) => p.connected).length,
-      distanceKm: requesterLocation && room.location ? distanceKm(requesterLocation, room.location) : null
+      connectedPlayers: [...room.players.values()].filter((p) => p.connected).length
     }));
-
-  return items.sort((a, b) => {
-    if (a.distanceKm == null && b.distanceKm == null) return 0;
-    if (a.distanceKm == null) return 1;
-    if (b.distanceKm == null) return -1;
-    return a.distanceKm - b.distanceKm;
-  });
 }
 
 function emitActiveRooms(targetSocket = null, filters = {}) {
@@ -138,13 +129,16 @@ function emitActiveRooms(targetSocket = null, filters = {}) {
 
 function emitRoom(room) {
   io.to(room.code).emit("room:update", roomSnapshot(room));
+  io.to(room.code).emit("ranking:update", buildRankingSnapshot(room));
   emitActiveRooms();
 }
 
 function bindSocketToPlayer(room, player, socket) {
   cancelReconnectTimer(room.code, player.id);
+
   player.socketId = socket.id;
   player.connected = true;
+  player.networkKey = getNetworkKey(socket);
 
   socket.join(room.code);
   socketIndex.set(socket.id, { roomCode: room.code, playerId: player.id });
@@ -174,10 +168,12 @@ function scheduleDisconnectCleanup(room, playerId) {
   const key = timerKey(room.code, playerId);
   const timer = setTimeout(() => {
     reconnectTimers.delete(key);
+
     const latestRoom = getRoom(room.code);
     if (!latestRoom) {
       return;
     }
+
     const player = latestRoom.players.get(playerId);
     if (!player || player.connected) {
       return;
@@ -215,8 +211,25 @@ function disconnectSocket(socketId) {
   player.connected = false;
   player.socketId = null;
   room.activeChallenges.delete(player.id);
+
   scheduleDisconnectCleanup(room, player.id);
   emitRoom(room);
+}
+
+function emitStateTransitions(room, transitions) {
+  for (const transition of transitions || []) {
+    const player = room.players.get(transition.playerId);
+    if (!player?.socketId) {
+      continue;
+    }
+
+    io.to(player.socketId).emit("player:state", {
+      type: transition.type,
+      position: transition.position,
+      outOf: transition.outOf,
+      ranking: buildRankingSnapshot(room)
+    });
+  }
 }
 
 function checkGameEnd(room) {
@@ -224,6 +237,7 @@ function checkGameEnd(room) {
   if (!result.finished) {
     return false;
   }
+
   emitRoom(room);
   io.to(room.code).emit("game:ended", result);
   return true;
@@ -236,11 +250,12 @@ io.on("connection", (socket) => {
     emitActiveRooms(socket, filters);
   });
 
-  socket.on("room:create", ({ name, location }) => {
+  socket.on("room:create", ({ name }) => {
     if (hasWhitespace(name)) {
       socket.emit("action:error", "Nome não pode ter espaços");
       return;
     }
+
     const playerName = normalizeUpper(name);
     if (!playerName) {
       socket.emit("action:error", "Nome é obrigatório");
@@ -252,8 +267,6 @@ io.on("connection", (socket) => {
     player.reconnectKey = genReconnectKey();
 
     const room = createRoom(roomCode, player);
-    room.hostNetworkKey = getNetworkKey(socket);
-    room.location = parseLocation(location);
     rooms.set(roomCode, room);
 
     bindSocketToPlayer(room, player, socket);
@@ -276,6 +289,7 @@ io.on("connection", (socket) => {
       socket.emit("action:error", "Nome não pode ter espaços");
       return;
     }
+
     const room = getRoom(code);
     const playerName = normalizeUpper(name);
 
@@ -294,12 +308,9 @@ io.on("connection", (socket) => {
 
     const player = createPlayer({ id: genPlayerId(), name: playerName, socketId: socket.id });
     player.reconnectKey = genReconnectKey();
-    if (room.status === "in_game") {
-      player.points = room.settings.initialPoints;
-      player.status = "alive";
-    }
 
     room.players.set(player.id, player);
+    addPlayerToRunningGame(room, player);
     bindSocketToPlayer(room, player, socket);
 
     socket.emit("room:joined", {
@@ -316,6 +327,7 @@ io.on("connection", (socket) => {
       socket.emit("room:reconnect-failed");
       return;
     }
+
     const room = getRoom(code);
     if (!room) {
       socket.emit("room:reconnect-failed");
@@ -344,6 +356,7 @@ io.on("connection", (socket) => {
     if (!info) {
       return;
     }
+
     const room = getRoom(info.roomCode);
     if (!room || room.hostId !== info.playerId || room.status !== "lobby") {
       return;
@@ -351,25 +364,6 @@ io.on("connection", (socket) => {
 
     room.settings = sanitizeSettings({ ...room.settings, ...settings });
     emitRoom(room);
-  });
-
-  socket.on("room:set-location", ({ location }) => {
-    const info = socketIndex.get(socket.id);
-    if (!info) {
-      return;
-    }
-    const room = getRoom(info.roomCode);
-    if (!room) {
-      return;
-    }
-
-    const player = room.players.get(info.playerId);
-    if (!player || !player.isHost) {
-      return;
-    }
-
-    room.location = parseLocation(location);
-    emitActiveRooms();
   });
 
   socket.on("room:leave", () => {
@@ -402,6 +396,7 @@ io.on("connection", (socket) => {
     if (!info) {
       return;
     }
+
     const room = getRoom(info.roomCode);
     if (!room) {
       return;
@@ -425,6 +420,7 @@ io.on("connection", (socket) => {
     if (!info) {
       return;
     }
+
     const room = getRoom(info.roomCode);
     if (!room) {
       return;
@@ -445,6 +441,7 @@ io.on("connection", (socket) => {
     if (!info) {
       return;
     }
+
     const room = getRoom(info.roomCode);
     if (!room) {
       return;
@@ -465,6 +462,7 @@ io.on("connection", (socket) => {
     if (!info) {
       return;
     }
+
     const room = getRoom(info.roomCode);
     if (!room) {
       return;
@@ -483,6 +481,9 @@ io.on("connection", (socket) => {
 
     socket.emit("challenge:resolved", response.result);
     io.to(room.code).emit("attack:result", response.result);
+    io.to(room.code).emit("ranking:update", response.ranking);
+
+    emitStateTransitions(room, response.transitions);
     emitRoom(room);
     checkGameEnd(room);
   });
@@ -492,6 +493,7 @@ io.on("connection", (socket) => {
     if (!info) {
       return;
     }
+
     const room = getRoom(info.roomCode);
     if (!room) {
       return;
@@ -505,6 +507,9 @@ io.on("connection", (socket) => {
 
     socket.emit("challenge:resolved", response.result);
     io.to(room.code).emit("attack:result", response.result);
+    io.to(room.code).emit("ranking:update", response.ranking);
+
+    emitStateTransitions(room, response.transitions);
     emitRoom(room);
     checkGameEnd(room);
   });

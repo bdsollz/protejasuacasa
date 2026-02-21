@@ -9,9 +9,11 @@ const state = {
   room: null,
   challenge: null,
   updates: [],
-  location: null,
   preferSameNetwork: false,
-  manualWaiting: false
+  manualWaiting: false,
+  latestRanking: null,
+  finalReport: null,
+  endNotice: ""
 };
 
 const els = {
@@ -20,7 +22,6 @@ const els = {
   name: document.getElementById("input-name"),
   code: document.getElementById("input-code"),
   activeRoomsList: document.getElementById("active-rooms-list"),
-  btnEnableLocation: document.getElementById("btn-enable-location"),
   checkSameNetwork: document.getElementById("check-same-network"),
   btnCreate: document.getElementById("btn-create"),
   btnJoin: document.getElementById("btn-join"),
@@ -45,6 +46,7 @@ const els = {
   quitChallenge: document.getElementById("btn-quit-challenge"),
   resultText: document.getElementById("result-text"),
   endText: document.getElementById("end-text"),
+  endRankText: document.getElementById("end-rank-text"),
   endPersonalReport: document.getElementById("end-personal-report"),
   endGlobalRanking: document.getElementById("end-global-ranking"),
   toast: document.getElementById("toast")
@@ -70,35 +72,11 @@ function toUpperInput(el) {
 }
 
 function roomsListFilters() {
-  return {
-    sameNetwork: Boolean(state.preferSameNetwork),
-    location: state.location
-  };
+  return { sameNetwork: Boolean(state.preferSameNetwork) };
 }
 
 function refreshRoomsList() {
   socket.emit("rooms:list", roomsListFilters());
-}
-
-function askLocation() {
-  if (!navigator.geolocation) {
-    showToast("GPS não disponível neste dispositivo.");
-    return;
-  }
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      state.location = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-      showToast("Localização ativada.");
-      if (state.room?.status === "lobby") {
-        socket.emit("room:set-location", { location: state.location });
-      }
-      refreshRoomsList();
-    },
-    () => {
-      showToast("Não foi possível obter GPS.");
-    },
-    { enableHighAccuracy: true, maximumAge: 30000, timeout: 10000 }
-  );
 }
 
 function saveSession() {
@@ -164,10 +142,7 @@ function renderActiveRooms(rooms) {
   }
 
   els.activeRoomsList.innerHTML = rooms
-    .map(
-      (room) =>
-        `<li><button data-code="${room.code}">Entrar em ${room.code} (${room.connectedPlayers}/${room.players})${room.distanceKm != null ? ` - ${room.distanceKm.toFixed(1)} km` : ""}</button></li>`
-    )
+    .map((room) => `<li><button data-code="${room.code}">Entrar em ${room.code} (${room.connectedPlayers}/${room.players})</button></li>`)
     .join("");
 
   els.activeRoomsList.querySelectorAll("button[data-code]").forEach((btn) => {
@@ -196,7 +171,7 @@ function renderLobby() {
     <div>Pontos iniciais: ${s.initialPoints}</div>
     <div>Meta: ${s.victoryGoal}</div>
     <div>Tentativas: ilimitadas</div>
-    <div>Limite por ataque: 10 pontos</div>
+    <div>Saque por ataque: 10 pontos fixos</div>
   `;
 
   const me = getMyPlayer();
@@ -216,12 +191,12 @@ function renderMap() {
     .map((p) => {
       const mine = p.id === state.me;
       const deadCls = p.status !== "alive" ? "dead" : "";
-      const disabled = mine || room.status !== "in_game" || state.challenge;
+      const disabled = mine || p.status !== "alive" || room.status !== "in_game" || state.challenge;
       return `
         <article class="house ${deadCls}">
           <strong>${p.name}${mine ? " (Você)" : ""}</strong>
           <div>${p.points} pts</div>
-          <div>${p.connected ? "online" : "offline"}</div>
+          <div>${p.status}</div>
           <button data-target="${p.id}" ${disabled ? "disabled" : ""}>Pegar pontos</button>
         </article>
       `;
@@ -235,33 +210,35 @@ function renderMap() {
   });
 }
 
-function renderEndReports(report) {
-  if (!report) {
-    els.endPersonalReport.innerHTML = "<li>Sem dados.</li>";
-    els.endGlobalRanking.innerHTML = "<li>Sem dados.</li>";
+function renderPlacementRanking(ranking) {
+  if (!ranking?.entries?.length) {
+    els.endGlobalRanking.innerHTML = "<li>Sem ranking ainda.</li>";
     return;
   }
 
-  const myPersonal = report.personal?.[state.me];
+  els.endGlobalRanking.innerHTML = ranking.entries
+    .map((row) => `<li>#${row.position}/${row.outOf} - ${row.playerName} (${row.status})</li>`)
+    .join("");
+}
+
+function renderPersonalReport(report) {
+  const myPersonal = report?.personal?.[state.me];
   if (!myPersonal || !myPersonal.byAttacker.length) {
     els.endPersonalReport.innerHTML = "<li>Ninguém pegou seus pontos.</li>";
-  } else {
-    els.endPersonalReport.innerHTML = myPersonal.byAttacker
-      .map((item) => `<li>${item.attackerName}: ${item.points} ponto(s)</li>`)
-      .join("");
-  }
-
-  if (!report.ranking?.length) {
-    els.endGlobalRanking.innerHTML = "<li>Sem ataques registrados.</li>";
     return;
   }
 
-  els.endGlobalRanking.innerHTML = report.ranking
-    .map(
-      (row) =>
-        `<li>${row.playerName} - ${row.totalStolen} ponto(s) roubados (${row.successfulAttacks} acertos / ${row.failedAttacks} falhas)</li>`
-    )
+  els.endPersonalReport.innerHTML = myPersonal.byAttacker
+    .map((item) => `<li>${item.attackerName}: ${item.points} ponto(s)</li>`)
     .join("");
+}
+
+function openRankingScreen() {
+  const ranking = state.finalReport?.placementRanking || state.latestRanking;
+  renderPlacementRanking(ranking);
+  renderPersonalReport(state.finalReport);
+  els.endRankText.textContent = state.endNotice || "";
+  showScreen("end");
 }
 
 function renderRoom() {
@@ -272,6 +249,8 @@ function renderRoom() {
     return;
   }
 
+  const me = getMyPlayer();
+
   if (state.room.status === "lobby") {
     renderLobby();
     showScreen("lobby");
@@ -279,10 +258,16 @@ function renderRoom() {
   }
 
   if (state.room.status === "in_game") {
+    if (me && me.status !== "alive") {
+      openRankingScreen();
+      return;
+    }
+
     if (state.manualWaiting && screens.lobby.classList.contains("active")) {
       renderLobby();
       return;
     }
+
     renderMap();
     if (!state.challenge) {
       showScreen("map");
@@ -291,7 +276,7 @@ function renderRoom() {
   }
 
   if (state.room.status === "finished") {
-    showScreen("end");
+    openRankingScreen();
   }
 }
 
@@ -311,16 +296,14 @@ function connectFromSavedSession() {
 els.name.addEventListener("input", () => toUpperInput(els.name));
 els.code.addEventListener("input", () => toUpperInput(els.code));
 els.challengeInput.addEventListener("input", () => toUpperInput(els.challengeInput));
+
 els.checkSameNetwork.addEventListener("change", () => {
   state.preferSameNetwork = els.checkSameNetwork.checked;
   refreshRoomsList();
 });
-els.btnEnableLocation.addEventListener("click", () => {
-  askLocation();
-});
 
 els.btnCreate.addEventListener("click", () => {
-  socket.emit("room:create", { name: els.name.value, location: state.location });
+  socket.emit("room:create", { name: els.name.value });
 });
 
 els.btnJoin.addEventListener("click", () => {
@@ -343,10 +326,13 @@ els.btnLeaveRoom.addEventListener("click", () => {
   state.me = null;
   state.reconnectKey = null;
   state.challenge = null;
+  state.finalReport = null;
+  state.latestRanking = null;
+  state.endNotice = "";
   clearSession();
   setGlobalRoomCode();
   showScreen("entry");
-  socket.emit("rooms:list");
+  refreshRoomsList();
 });
 
 els.btnOpenWaitingMap.addEventListener("click", () => {
@@ -409,9 +395,12 @@ socket.on("room:joined", ({ playerId, reconnectKey, room }) => {
   state.me = playerId;
   state.reconnectKey = reconnectKey;
   state.room = room;
+  state.latestRanking = room.ranking || null;
   state.updates = [];
   state.challenge = null;
   state.manualWaiting = false;
+  state.finalReport = null;
+  state.endNotice = "";
   els.updatesList.innerHTML = "";
   saveSession();
   renderRoom();
@@ -420,11 +409,36 @@ socket.on("room:joined", ({ playerId, reconnectKey, room }) => {
 socket.on("room:update", (room) => {
   const becameInGame = state.room?.status !== "in_game" && room.status === "in_game";
   state.room = room;
+  state.latestRanking = room.ranking || state.latestRanking;
+
   if (becameInGame) {
     state.manualWaiting = false;
   }
+
   saveSession();
   renderRoom();
+});
+
+socket.on("ranking:update", (ranking) => {
+  state.latestRanking = ranking;
+  if (screens.end.classList.contains("active")) {
+    renderPlacementRanking(ranking);
+  }
+});
+
+socket.on("player:state", ({ type, position, outOf, ranking }) => {
+  state.latestRanking = ranking || state.latestRanking;
+
+  if (type === "eliminated") {
+    state.endNotice = `Você foi eliminado. Posição: ${position}/${outOf}.`;
+    openRankingScreen();
+    return;
+  }
+
+  if (type === "finished") {
+    state.endNotice = `Você atingiu a meta. Posição: ${position}/${outOf}.`;
+    openRankingScreen();
+  }
 });
 
 socket.on("game:started", () => {
@@ -454,9 +468,7 @@ socket.on("challenge:resolved", (result) => {
     return;
   }
 
-  els.resultText.textContent = result.success
-    ? `Sucesso: +${result.value} pontos.`
-    : `Falha: -${result.value} pontos.`;
+  els.resultText.textContent = result.success ? `Sucesso: +${result.value} pontos.` : `Falha: -${result.value} pontos.`;
   showScreen("result");
   setTimeout(() => {
     if (state.room?.status === "in_game") {
@@ -473,6 +485,7 @@ socket.on("attack:result", (result) => {
   if (result.attackerId === me.id) {
     return;
   }
+
   if (result.targetId === me.id) {
     const attackerName = getPlayerName(result.attackerId);
     if (result.success) {
@@ -489,10 +502,19 @@ socket.on("attack:result", (result) => {
 });
 
 socket.on("game:ended", ({ winnerId, report }) => {
+  state.finalReport = report || null;
+  state.latestRanking = report?.placementRanking || state.latestRanking;
+
   const winner = state.room.players.find((p) => p.id === winnerId);
-  els.endText.textContent = winner ? `Vencedor: ${winner.name}` : "Sem vencedor";
-  renderEndReports(report);
-  showScreen("end");
+  els.endText.textContent = winner ? `Partida encerrada. Líder: ${winner.name}` : "Partida encerrada.";
+  if (!state.endNotice) {
+    const myRow = state.latestRanking?.entries?.find((row) => row.playerId === state.me);
+    if (myRow) {
+      state.endNotice = `Sua posição final: ${myRow.position}/${myRow.outOf}.`;
+    }
+  }
+
+  openRankingScreen();
 });
 
 setGlobalRoomCode();
