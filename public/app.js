@@ -1,8 +1,11 @@
 const SOCKET_URL = window.__APP_CONFIG__?.SOCKET_URL || window.location.origin;
 const socket = io(SOCKET_URL, { transports: ["websocket", "polling"] });
 
+const SESSION_KEY = "proteja_sua_casa_session";
+
 const state = {
   me: null,
+  reconnectKey: null,
   room: null,
   challenge: null,
   updates: []
@@ -10,11 +13,18 @@ const state = {
 
 const els = {
   statusLabel: document.getElementById("statusLabel"),
+  globalRoomCode: document.getElementById("global-room-code"),
   name: document.getElementById("input-name"),
   code: document.getElementById("input-code"),
+  activeRoomsList: document.getElementById("active-rooms-list"),
   btnCreate: document.getElementById("btn-create"),
   btnJoin: document.getElementById("btn-join"),
   btnStart: document.getElementById("btn-start"),
+  btnBackGame: document.getElementById("btn-back-game"),
+  btnLeaveRoom: document.getElementById("btn-leave-room"),
+  btnOpenWaitingMap: document.getElementById("btn-open-waiting-map"),
+  btnOpenWaitingChallenge: document.getElementById("btn-open-waiting-challenge"),
+  btnOpenWaitingResult: document.getElementById("btn-open-waiting-result"),
   roomCode: document.getElementById("room-code"),
   playersLobby: document.getElementById("players-lobby"),
   settings: document.getElementById("settings"),
@@ -54,6 +64,40 @@ function toUpperInput(el) {
   el.value = (el.value || "").toUpperCase();
 }
 
+function saveSession() {
+  if (!state.room || !state.me || !state.reconnectKey) {
+    return;
+  }
+  localStorage.setItem(
+    SESSION_KEY,
+    JSON.stringify({
+      roomCode: state.room.code,
+      playerId: state.me,
+      reconnectKey: state.reconnectKey
+    })
+  );
+}
+
+function clearSession() {
+  localStorage.removeItem(SESSION_KEY);
+}
+
+function getSavedSession() {
+  const raw = localStorage.getItem(SESSION_KEY);
+  if (!raw) {
+    return null;
+  }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function setGlobalRoomCode() {
+  els.globalRoomCode.textContent = `Sala: ${state.room?.code || "-"}`;
+}
+
 function showScreen(name) {
   Object.values(screens).forEach((s) => s.classList.remove("active"));
   screens[name].classList.add("active");
@@ -65,22 +109,48 @@ function getMyPlayer() {
 }
 
 function getPlayerName(playerId) {
-  if (!state.room) return "ALGUÉM";
+  if (!state.room) return "ALGUEM";
   const player = state.room.players.find((p) => p.id === playerId);
-  return player?.name || "ALGUÉM";
+  return player?.name || "ALGUEM";
 }
 
 function addUpdate(message) {
   state.updates.unshift(message);
-  state.updates = state.updates.slice(0, 6);
+  state.updates = state.updates.slice(0, 8);
   els.updatesList.innerHTML = state.updates.map((item) => `<li>${item}</li>`).join("");
+}
+
+function renderActiveRooms(rooms) {
+  if (!rooms?.length) {
+    els.activeRoomsList.innerHTML = "<li>Nenhuma sala ativa no momento.</li>";
+    return;
+  }
+
+  els.activeRoomsList.innerHTML = rooms
+    .map(
+      (room) =>
+        `<li><button data-code="${room.code}">Entrar em ${room.code} (${room.connectedPlayers}/${room.players})</button></li>`
+    )
+    .join("");
+
+  els.activeRoomsList.querySelectorAll("button[data-code]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      els.code.value = btn.dataset.code;
+      if (!els.name.value.trim()) {
+        showToast("Digite seu nome para entrar.");
+        return;
+      }
+      socket.emit("room:join", { code: els.code.value, name: els.name.value });
+    });
+  });
 }
 
 function renderLobby() {
   const room = state.room;
   els.roomCode.textContent = room.code;
   els.playersLobby.innerHTML = room.players
-    .map((p) => `<li>${p.name}${p.isHost ? " (Host)" : ""}</li>`)
+    .map((p) => `${p.name}${p.isHost ? " (Host)" : ""}${p.connected ? "" : " (offline)"}`)
+    .map((txt) => `<li>${txt}</li>`)
     .join("");
 
   const s = room.settings;
@@ -93,7 +163,9 @@ function renderLobby() {
   `;
 
   const me = getMyPlayer();
-  els.btnStart.style.display = me && me.isHost ? "block" : "none";
+  const isHost = Boolean(me && me.isHost);
+  els.btnStart.style.display = isHost && room.status === "lobby" ? "block" : "none";
+  els.btnBackGame.style.display = room.status === "in_game" ? "block" : "none";
 }
 
 function renderMap() {
@@ -107,12 +179,12 @@ function renderMap() {
     .map((p) => {
       const mine = p.id === state.me;
       const deadCls = p.status !== "alive" ? "dead" : "";
-      const disabled = mine || p.status !== "alive" || room.status !== "in_game" || state.challenge;
+      const disabled = mine || room.status !== "in_game" || state.challenge;
       return `
         <article class="house ${deadCls}">
           <strong>${p.name}${mine ? " (Você)" : ""}</strong>
           <div>${p.points} pts</div>
-          <div>${p.status}</div>
+          <div>${p.connected ? "online" : "offline"}</div>
           <button data-target="${p.id}" ${disabled ? "disabled" : ""}>Pegar pontos</button>
         </article>
       `;
@@ -124,26 +196,6 @@ function renderMap() {
       socket.emit("game:choose-target", { targetId: btn.dataset.target });
     });
   });
-}
-
-function renderRoom() {
-  if (!state.room) return;
-
-  if (state.room.status === "lobby") {
-    renderLobby();
-    showScreen("lobby");
-    return;
-  }
-
-  if (state.room.status === "finished") {
-    showScreen("end");
-    return;
-  }
-
-  renderMap();
-  if (!state.challenge) {
-    showScreen("map");
-  }
 }
 
 function renderEndReports(report) {
@@ -166,12 +218,57 @@ function renderEndReports(report) {
     els.endGlobalRanking.innerHTML = "<li>Sem ataques registrados.</li>";
     return;
   }
+
   els.endGlobalRanking.innerHTML = report.ranking
     .map(
       (row) =>
         `<li>${row.playerName} - ${row.totalStolen} ponto(s) roubados (${row.successfulAttacks} acertos / ${row.failedAttacks} falhas)</li>`
     )
     .join("");
+}
+
+function renderRoom() {
+  setGlobalRoomCode();
+
+  if (!state.room) {
+    showScreen("entry");
+    return;
+  }
+
+  if (state.room.status === "lobby") {
+    renderLobby();
+    showScreen("lobby");
+    return;
+  }
+
+  if (state.room.status === "in_game") {
+    if (screens.lobby.classList.contains("active")) {
+      renderLobby();
+      return;
+    }
+    renderMap();
+    if (!state.challenge) {
+      showScreen("map");
+    }
+    return;
+  }
+
+  if (state.room.status === "finished") {
+    showScreen("end");
+  }
+}
+
+function connectFromSavedSession() {
+  const saved = getSavedSession();
+  if (!saved?.roomCode || !saved?.playerId || !saved?.reconnectKey) {
+    return;
+  }
+
+  socket.emit("room:reconnect", {
+    code: saved.roomCode,
+    playerId: saved.playerId,
+    reconnectKey: saved.reconnectKey
+  });
 }
 
 els.name.addEventListener("input", () => toUpperInput(els.name));
@@ -190,6 +287,38 @@ els.btnStart.addEventListener("click", () => {
   socket.emit("game:start");
 });
 
+els.btnBackGame.addEventListener("click", () => {
+  showScreen("map");
+  renderRoom();
+});
+
+els.btnLeaveRoom.addEventListener("click", () => {
+  socket.emit("room:leave");
+  state.room = null;
+  state.me = null;
+  state.reconnectKey = null;
+  state.challenge = null;
+  clearSession();
+  setGlobalRoomCode();
+  showScreen("entry");
+  socket.emit("rooms:list");
+});
+
+els.btnOpenWaitingMap.addEventListener("click", () => {
+  renderLobby();
+  showScreen("lobby");
+});
+
+els.btnOpenWaitingChallenge.addEventListener("click", () => {
+  renderLobby();
+  showScreen("lobby");
+});
+
+els.btnOpenWaitingResult.addEventListener("click", () => {
+  renderLobby();
+  showScreen("lobby");
+});
+
 els.btnFinishGame.addEventListener("click", () => {
   socket.emit("game:finish");
 });
@@ -205,6 +334,8 @@ els.quitChallenge.addEventListener("click", () => {
 
 socket.on("connect", () => {
   els.statusLabel.textContent = "Conectado";
+  socket.emit("rooms:list");
+  connectFromSavedSession();
 });
 
 socket.on("disconnect", () => {
@@ -215,16 +346,31 @@ socket.on("action:error", (msg) => {
   showToast(msg);
 });
 
-socket.on("room:joined", ({ playerId, room }) => {
+socket.on("room:reconnect-failed", () => {
+  clearSession();
+});
+
+socket.on("rooms:active", (rooms) => {
+  if (state.room) {
+    return;
+  }
+  renderActiveRooms(rooms);
+});
+
+socket.on("room:joined", ({ playerId, reconnectKey, room }) => {
   state.me = playerId;
+  state.reconnectKey = reconnectKey;
   state.room = room;
   state.updates = [];
+  state.challenge = null;
   els.updatesList.innerHTML = "";
+  saveSession();
   renderRoom();
 });
 
 socket.on("room:update", (room) => {
   state.room = room;
+  saveSession();
   renderRoom();
 });
 
@@ -288,3 +434,6 @@ socket.on("game:ended", ({ winnerId, report }) => {
   renderEndReports(report);
   showScreen("end");
 });
+
+setGlobalRoomCode();
+renderActiveRooms([]);

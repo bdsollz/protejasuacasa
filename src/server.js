@@ -1,7 +1,7 @@
 import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
-import { customAlphabet } from "nanoid";
+import { customAlphabet, nanoid } from "nanoid";
 import {
   createPlayer,
   createRoom,
@@ -16,6 +16,8 @@ import {
   submitAnswer
 } from "./gameEngine.js";
 
+const DISCONNECT_GRACE_MS = 5 * 60 * 1000;
+
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
@@ -24,46 +26,134 @@ const io = new Server(httpServer, {
     methods: ["GET", "POST"]
   }
 });
+
 const genCode = customAlphabet("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", 6);
+const genPlayerId = customAlphabet("abcdefghijklmnopqrstuvwxyz0123456789", 16);
+const genReconnectKey = () => nanoid(36);
 
 app.use(express.static("public"));
 
 const rooms = new Map();
 const socketIndex = new Map();
+const reconnectTimers = new Map();
 
 function getRoom(code) {
   return rooms.get(normalizeUpper(code));
 }
 
-function emitRoom(room) {
-  io.to(room.code).emit("room:update", roomSnapshot(room));
+function timerKey(roomCode, playerId) {
+  return `${roomCode}:${playerId}`;
 }
 
-function removePlayer(socketId) {
+function cancelReconnectTimer(roomCode, playerId) {
+  const key = timerKey(roomCode, playerId);
+  const timer = reconnectTimers.get(key);
+  if (!timer) {
+    return;
+  }
+  clearTimeout(timer);
+  reconnectTimers.delete(key);
+}
+
+function activeRoomsSnapshot() {
+  return [...rooms.values()]
+    .filter((room) => room.status === "in_game")
+    .map((room) => ({
+      code: room.code,
+      players: room.players.size,
+      connectedPlayers: [...room.players.values()].filter((p) => p.connected).length
+    }));
+}
+
+function emitActiveRooms(targetSocket = null) {
+  const payload = activeRoomsSnapshot();
+  if (targetSocket) {
+    targetSocket.emit("rooms:active", payload);
+    return;
+  }
+  io.emit("rooms:active", payload);
+}
+
+function emitRoom(room) {
+  io.to(room.code).emit("room:update", roomSnapshot(room));
+  emitActiveRooms();
+}
+
+function bindSocketToPlayer(room, player, socket) {
+  cancelReconnectTimer(room.code, player.id);
+  player.socketId = socket.id;
+  player.connected = true;
+
+  socket.join(room.code);
+  socketIndex.set(socket.id, { roomCode: room.code, playerId: player.id });
+}
+
+function cleanupRoomIfEmpty(room) {
+  if (room.players.size > 0) {
+    return;
+  }
+  rooms.delete(room.code);
+}
+
+function dropPlayer(room, playerId) {
+  room.players.delete(playerId);
+  room.activeChallenges.delete(playerId);
+
+  if (room.hostId === playerId && room.players.size > 0) {
+    room.hostId = room.players.values().next().value.id;
+  }
+
+  cleanupRoomIfEmpty(room);
+}
+
+function scheduleDisconnectCleanup(room, playerId) {
+  cancelReconnectTimer(room.code, playerId);
+
+  const key = timerKey(room.code, playerId);
+  const timer = setTimeout(() => {
+    reconnectTimers.delete(key);
+    const latestRoom = getRoom(room.code);
+    if (!latestRoom) {
+      return;
+    }
+    const player = latestRoom.players.get(playerId);
+    if (!player || player.connected) {
+      return;
+    }
+
+    dropPlayer(latestRoom, playerId);
+    if (rooms.has(latestRoom.code)) {
+      emitRoom(latestRoom);
+    } else {
+      emitActiveRooms();
+    }
+  }, DISCONNECT_GRACE_MS);
+
+  reconnectTimers.set(key, timer);
+}
+
+function disconnectSocket(socketId) {
   const info = socketIndex.get(socketId);
   if (!info) {
     return;
   }
 
   const room = getRoom(info.roomCode);
-  if (!room) {
-    socketIndex.delete(socketId);
-    return;
-  }
-
-  room.players.delete(info.playerId);
-  room.activeChallenges.delete(info.playerId);
   socketIndex.delete(socketId);
 
-  if (room.players.size === 0) {
-    rooms.delete(room.code);
+  if (!room) {
     return;
   }
 
-  if (room.hostId === info.playerId) {
-    room.hostId = room.players.values().next().value.id;
+  const player = room.players.get(info.playerId);
+  if (!player) {
+    return;
   }
 
+  player.connected = false;
+  player.socketId = null;
+  room.activeChallenges.delete(player.id);
+  scheduleDisconnectCleanup(room, player.id);
   emitRoom(room);
 }
 
@@ -78,6 +168,12 @@ function checkGameEnd(room) {
 }
 
 io.on("connection", (socket) => {
+  emitActiveRooms(socket);
+
+  socket.on("rooms:list", () => {
+    emitActiveRooms(socket);
+  });
+
   socket.on("room:create", ({ name }) => {
     const playerName = normalizeUpper(name);
     if (!playerName) {
@@ -86,14 +182,20 @@ io.on("connection", (socket) => {
     }
 
     const roomCode = genCode();
-    const player = createPlayer({ id: socket.id, name: playerName, socketId: socket.id, isHost: true });
+    const player = createPlayer({ id: genPlayerId(), name: playerName, socketId: socket.id, isHost: true });
+    player.reconnectKey = genReconnectKey();
+
     const room = createRoom(roomCode, player);
-
     rooms.set(roomCode, room);
-    socketIndex.set(socket.id, { roomCode, playerId: player.id });
-    socket.join(roomCode);
 
-    socket.emit("room:joined", { playerId: player.id, room: roomSnapshot(room) });
+    bindSocketToPlayer(room, player, socket);
+
+    socket.emit("room:joined", {
+      playerId: player.id,
+      reconnectKey: player.reconnectKey,
+      room: roomSnapshot(room)
+    });
+
     emitRoom(room);
   });
 
@@ -114,13 +216,42 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const player = createPlayer({ id: socket.id, name: playerName, socketId: socket.id });
+    const player = createPlayer({ id: genPlayerId(), name: playerName, socketId: socket.id });
+    player.reconnectKey = genReconnectKey();
+
     room.players.set(player.id, player);
+    bindSocketToPlayer(room, player, socket);
 
-    socketIndex.set(socket.id, { roomCode: room.code, playerId: player.id });
-    socket.join(room.code);
+    socket.emit("room:joined", {
+      playerId: player.id,
+      reconnectKey: player.reconnectKey,
+      room: roomSnapshot(room)
+    });
 
-    socket.emit("room:joined", { playerId: player.id, room: roomSnapshot(room) });
+    emitRoom(room);
+  });
+
+  socket.on("room:reconnect", ({ code, playerId, reconnectKey }) => {
+    const room = getRoom(code);
+    if (!room) {
+      socket.emit("room:reconnect-failed");
+      return;
+    }
+
+    const player = room.players.get(String(playerId || ""));
+    if (!player || player.reconnectKey !== String(reconnectKey || "")) {
+      socket.emit("room:reconnect-failed");
+      return;
+    }
+
+    bindSocketToPlayer(room, player, socket);
+
+    socket.emit("room:joined", {
+      playerId: player.id,
+      reconnectKey: player.reconnectKey,
+      room: roomSnapshot(room)
+    });
+
     emitRoom(room);
   });
 
@@ -136,6 +267,31 @@ io.on("connection", (socket) => {
 
     room.settings = sanitizeSettings({ ...room.settings, ...settings });
     emitRoom(room);
+  });
+
+  socket.on("room:leave", () => {
+    const info = socketIndex.get(socket.id);
+    if (!info) {
+      return;
+    }
+
+    const room = getRoom(info.roomCode);
+    socketIndex.delete(socket.id);
+
+    if (!room) {
+      return;
+    }
+
+    cancelReconnectTimer(room.code, info.playerId);
+    dropPlayer(room, info.playerId);
+
+    socket.leave(info.roomCode);
+
+    if (rooms.has(room.code)) {
+      emitRoom(room);
+    } else {
+      emitActiveRooms();
+    }
   });
 
   socket.on("game:start", () => {
@@ -190,7 +346,7 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const started = startInvasion(room, info.playerId, targetId);
+    const started = startInvasion(room, info.playerId, String(targetId || ""));
     if (!started.ok) {
       socket.emit("action:error", started.reason);
       return;
@@ -250,7 +406,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
-    removePlayer(socket.id);
+    disconnectSocket(socket.id);
   });
 });
 

@@ -10,7 +10,10 @@
     <main class="app">
       <header class="topbar">
         <h1>Proteja sua Casa</h1>
-        <div id="statusLabel">Desconectado</div>
+        <div>
+          <div id="statusLabel">Desconectado</div>
+          <div id="global-room-code">Sala: -</div>
+        </div>
       </header>
 
       <section id="screen-entry" class="screen active">
@@ -20,6 +23,10 @@
         <div class="row">
           <button id="btn-create">Criar sala</button>
           <button id="btn-join">Entrar</button>
+        </div>
+        <div class="panel">
+          <h3>Salas ativas sugeridas</h3>
+          <ul id="active-rooms-list"></ul>
         </div>
       </section>
 
@@ -32,6 +39,8 @@
           <ul id="players-lobby"></ul>
         </div>
         <button id="btn-start" class="full">Iniciar partida</button>
+        <button id="btn-back-game" class="full">Voltar ao jogo ativo</button>
+        <button id="btn-leave-room" class="full danger">Sair da sala</button>
       </section>
 
       <section id="screen-map" class="screen">
@@ -40,6 +49,7 @@
           <ul id="updates-list"></ul>
         </section>
         <p>Seu cofre: <strong id="my-points">0</strong></p>
+        <button id="btn-open-waiting-map" class="full">Ver sala de espera</button>
         <button id="btn-finish-game" class="full danger">Finalizar partida</button>
         <div id="grid-houses" class="grid"></div>
       </section>
@@ -52,11 +62,13 @@
         <label>Resposta<input id="challenge-input" autocomplete="off" /></label>
         <button id="btn-submit-answer" class="full">Enviar</button>
         <button id="btn-quit-challenge" class="full danger">Sair da casa</button>
+        <button id="btn-open-waiting-challenge" class="full">Ver sala de espera</button>
       </section>
 
       <section id="screen-result" class="screen">
         <h2>Resultado</h2>
         <p id="result-text"></p>
+        <button id="btn-open-waiting-result" class="full">Ver sala de espera</button>
       </section>
 
       <section id="screen-end" class="screen">

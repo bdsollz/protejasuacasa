@@ -31,6 +31,11 @@ body {
   align-items: center;
 }
 
+#global-room-code {
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+
 .screen {
   display: none;
   animation: fade 0.2s ease;
@@ -99,6 +104,12 @@ button {
   padding-left: 18px;
   max-height: 120px;
   overflow-y: auto;
+}
+
+#active-rooms-list button {
+  width: 100%;
+  text-align: left;
+  margin-bottom: 6px;
 }
 
 .grid {

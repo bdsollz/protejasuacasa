@@ -46,6 +46,8 @@ export function createPlayer({ id, name, socketId, isHost = false }) {
   return {
     id,
     socketId,
+    reconnectKey: null,
+    connected: true,
     name: normalizeUpper(name),
     isHost,
     points: 0,
@@ -64,6 +66,7 @@ export function roomSnapshot(room) {
     id: p.id,
     name: p.name,
     isHost: p.id === room.hostId,
+    connected: Boolean(p.connected),
     points: p.points,
     status: p.status
   }));
@@ -87,6 +90,7 @@ export function startGame(room) {
   for (const player of room.players.values()) {
     player.points = room.settings.initialPoints;
     player.status = "alive";
+    player.connected = Boolean(player.socketId);
     player.result = null;
     player.totalStolen = 0;
     player.successfulAttacks = 0;
