@@ -4,8 +4,7 @@ const socket = io(SOCKET_URL, { transports: ["websocket", "polling"] });
 const state = {
   me: null,
   room: null,
-  challenge: null,
-  timerRef: null
+  challenge: null
 };
 
 const els = {
@@ -18,9 +17,6 @@ const els = {
   roomCode: document.getElementById("room-code"),
   playersLobby: document.getElementById("players-lobby"),
   settings: document.getElementById("settings"),
-  hudRound: document.getElementById("hud-round"),
-  hudPhase: document.getElementById("hud-phase"),
-  hudTimer: document.getElementById("hud-timer"),
   myPoints: document.getElementById("my-points"),
   btnFinishGame: document.getElementById("btn-finish-game"),
   houses: document.getElementById("grid-houses"),
@@ -29,7 +25,6 @@ const els = {
   challengeWord: document.getElementById("challenge-word"),
   challengeInput: document.getElementById("challenge-input"),
   challengeAttempts: document.getElementById("challenge-attempts"),
-  challengeTime: document.getElementById("challenge-time"),
   submitAnswer: document.getElementById("btn-submit-answer"),
   quitChallenge: document.getElementById("btn-quit-challenge"),
   resultText: document.getElementById("result-text"),
@@ -50,6 +45,10 @@ function showToast(message) {
   els.toast.textContent = message;
   els.toast.classList.add("show");
   setTimeout(() => els.toast.classList.remove("show"), 1800);
+}
+
+function toUpperInput(el) {
+  el.value = (el.value || "").toUpperCase();
 }
 
 function showScreen(name) {
@@ -74,7 +73,6 @@ function renderLobby() {
     <h3>Config</h3>
     <div>Pontos iniciais: ${s.initialPoints}</div>
     <div>Meta: ${s.victoryGoal}</div>
-    <div>Tempo desafio: ${s.challengeSeconds}s</div>
     <div>Tentativas: ${s.maxAttempts}</div>
   `;
 
@@ -82,20 +80,10 @@ function renderLobby() {
   els.btnStart.style.display = me && me.isHost ? "block" : "none";
 }
 
-function phaseLabel(phase) {
-  if (phase === "planning") return "Planejamento";
-  if (phase === "execution") return "Desafio";
-  if (phase === "result") return "Resultado";
-  if (phase === "finished") return "Encerrado";
-  return "Lobby";
-}
-
 function renderMap() {
   const room = state.room;
   const me = getMyPlayer();
 
-  els.hudRound.textContent = `Rodada ${room.round}`;
-  els.hudPhase.textContent = phaseLabel(room.phase);
   els.myPoints.textContent = me ? me.points : 0;
   els.btnFinishGame.style.display = me && me.isHost ? "block" : "none";
 
@@ -104,7 +92,7 @@ function renderMap() {
       const mine = p.id === state.me;
       const deadCls = p.status !== "alive" ? "dead" : "";
       const shieldCls = p.shieldActive ? "shield" : "";
-      const disabled = mine || p.status !== "alive" || room.phase !== "planning" || p.shieldActive;
+      const disabled = mine || p.status !== "alive" || room.status !== "in_game" || p.shieldActive || state.challenge;
       return `
         <article class="house ${deadCls} ${shieldCls}">
           <strong>${p.name}${mine ? " (Você)" : ""}</strong>
@@ -119,33 +107,12 @@ function renderMap() {
   document.querySelectorAll("button[data-target]").forEach((btn) => {
     btn.addEventListener("click", () => {
       socket.emit("game:choose-target", { targetId: btn.dataset.target });
-      showToast("Invasão escolhida");
     });
   });
 }
 
-function renderTimer(deadline) {
-  clearInterval(state.timerRef);
-  if (!deadline) {
-    els.hudTimer.textContent = "0s";
-    return;
-  }
-
-  const tick = () => {
-    const left = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
-    els.hudTimer.textContent = `${left}s`;
-    if (state.challenge) {
-      els.challengeTime.textContent = left;
-    }
-  };
-
-  tick();
-  state.timerRef = setInterval(tick, 250);
-}
-
 function renderRoom() {
   if (!state.room) return;
-  renderTimer(state.room.phaseEndsAt);
 
   if (state.room.status === "lobby") {
     renderLobby();
@@ -163,6 +130,10 @@ function renderRoom() {
     showScreen("map");
   }
 }
+
+els.name.addEventListener("input", () => toUpperInput(els.name));
+els.code.addEventListener("input", () => toUpperInput(els.code));
+els.challengeInput.addEventListener("input", () => toUpperInput(els.challengeInput));
 
 els.btnCreate.addEventListener("click", () => {
   socket.emit("room:create", { name: els.name.value });
@@ -212,10 +183,6 @@ socket.on("room:update", (room) => {
   renderRoom();
 });
 
-socket.on("phase:update", ({ phaseEndsAt }) => {
-  renderTimer(phaseEndsAt);
-});
-
 socket.on("challenge:start", (challenge) => {
   state.challenge = challenge;
   const target = state.room.players.find((p) => p.id === challenge.targetId);
@@ -223,7 +190,6 @@ socket.on("challenge:start", (challenge) => {
   els.challengeHint.textContent = `Dica: ${challenge.hint}`;
   els.challengeWord.textContent = challenge.masked;
   els.challengeAttempts.textContent = challenge.attemptsLeft;
-  els.challengeTime.textContent = Math.max(0, Math.ceil((challenge.deadline - Date.now()) / 1000));
   showScreen("challenge");
 });
 
@@ -232,28 +198,35 @@ socket.on("challenge:attempt", ({ attemptsLeft }) => {
   showToast("Resposta incorreta");
 });
 
-socket.on("challenge:resolved", () => {
-  state.challenge = null;
-  showScreen("map");
-});
-
-socket.on("round:result", (result) => {
+socket.on("challenge:resolved", (result) => {
   state.challenge = null;
   if (!result) {
-    els.resultText.textContent = "Sem ação nesta rodada.";
-  } else if (result.success) {
-    if (result.suffered) {
-      els.resultText.textContent = `Você perdeu ${Math.abs(result.value)} pontos.`;
-    } else if (result.defended) {
-      els.resultText.textContent = `Você recebeu +${result.value} por defesa.`;
-    } else {
-      els.resultText.textContent = `Sucesso: +${result.value} pontos.`;
-    }
-  } else {
-    els.resultText.textContent = `Falha: -${result.value} pontos.`;
+    showScreen("map");
+    return;
   }
 
+  els.resultText.textContent = result.success
+    ? `Sucesso: +${result.value} pontos.`
+    : `Falha: -${result.value} pontos.`;
   showScreen("result");
+  setTimeout(() => {
+    if (state.room?.status === "in_game") {
+      showScreen("map");
+    }
+  }, 1300);
+});
+
+socket.on("attack:result", (result) => {
+  if (!state.room || !result) return;
+  const me = getMyPlayer();
+  if (!me) return;
+
+  if (result.attackerId === me.id) {
+    return;
+  }
+  if (result.targetId === me.id) {
+    showToast(`Sua casa foi atacada (${result.success ? "-" + result.value : "+" + result.value})`);
+  }
 });
 
 socket.on("game:ended", ({ winnerId }) => {

@@ -5,16 +5,14 @@ import { customAlphabet } from "nanoid";
 import {
   createPlayer,
   createRoom,
-  finalizeExecution,
+  evaluateGameOver,
   finishGameByHost,
-  planInvasion,
+  normalizeUpper,
   quitChallenge,
-  resolveRoundEnd,
   roomSnapshot,
   sanitizeSettings,
-  startExecution,
   startGame,
-  startPlanning,
+  startInvasion,
   submitAnswer
 } from "./gameEngine.js";
 
@@ -32,103 +30,13 @@ app.use(express.static("public"));
 
 const rooms = new Map();
 const socketIndex = new Map();
-const timers = new Map();
 
 function getRoom(code) {
-  return rooms.get(String(code || "").trim().toUpperCase());
+  return rooms.get(normalizeUpper(code));
 }
 
 function emitRoom(room) {
   io.to(room.code).emit("room:update", roomSnapshot(room));
-}
-
-function clearRoomTimers(code) {
-  const current = timers.get(code);
-  if (!current) {
-    return;
-  }
-  clearTimeout(current.phaseTimeout);
-  clearInterval(current.tickInterval);
-  timers.delete(code);
-}
-
-function phaseTick(room) {
-  io.to(room.code).emit("phase:update", {
-    phase: room.phase,
-    round: room.round,
-    phaseEndsAt: room.phaseEndsAt
-  });
-}
-
-function schedulePlanning(room) {
-  clearRoomTimers(room.code);
-  startPlanning(room, Date.now(), room.settings.planningSeconds * 1000);
-  emitRoom(room);
-  phaseTick(room);
-
-  const tickInterval = setInterval(() => phaseTick(room), 1000);
-  const phaseTimeout = setTimeout(() => {
-    scheduleExecution(room);
-  }, room.settings.planningSeconds * 1000);
-
-  timers.set(room.code, { tickInterval, phaseTimeout });
-}
-
-function scheduleExecution(room) {
-  clearRoomTimers(room.code);
-  startExecution(room, Date.now(), room.settings.challengeSeconds * 1000);
-
-  for (const [attackerId, challenge] of room.activeChallenges.entries()) {
-    const attacker = room.players.get(attackerId);
-    if (!attacker) {
-      continue;
-    }
-    io.to(attacker.socketId).emit("challenge:start", {
-      targetId: challenge.targetId,
-      masked: challenge.masked,
-      hint: challenge.hint,
-      attemptsLeft: challenge.attemptsLeft,
-      deadline: challenge.deadline
-    });
-  }
-
-  emitRoom(room);
-  phaseTick(room);
-
-  const tickInterval = setInterval(() => phaseTick(room), 1000);
-  const phaseTimeout = setTimeout(() => {
-    finalizeAndShowResult(room);
-  }, room.settings.challengeSeconds * 1000);
-
-  timers.set(room.code, { tickInterval, phaseTimeout });
-}
-
-function finalizeAndShowResult(room) {
-  clearRoomTimers(room.code);
-  finalizeExecution(room, Date.now());
-  room.phase = "result";
-  room.phaseEndsAt = Date.now() + room.settings.resultSeconds * 1000;
-  emitRoom(room);
-
-  for (const player of room.players.values()) {
-    io.to(player.socketId).emit("round:result", player.result);
-  }
-
-  const tickInterval = setInterval(() => phaseTick(room), 1000);
-  const phaseTimeout = setTimeout(() => {
-    const result = resolveRoundEnd(room);
-    emitRoom(room);
-
-    if (result.finished) {
-      clearRoomTimers(room.code);
-      io.to(room.code).emit("game:ended", result);
-      return;
-    }
-
-    schedulePlanning(room);
-  }, room.settings.resultSeconds * 1000);
-
-  timers.set(room.code, { tickInterval, phaseTimeout });
 }
 
 function removePlayer(socketId) {
@@ -144,10 +52,10 @@ function removePlayer(socketId) {
   }
 
   room.players.delete(info.playerId);
+  room.activeChallenges.delete(info.playerId);
   socketIndex.delete(socketId);
 
   if (room.players.size === 0) {
-    clearRoomTimers(room.code);
     rooms.delete(room.code);
     return;
   }
@@ -159,9 +67,19 @@ function removePlayer(socketId) {
   emitRoom(room);
 }
 
+function checkGameEnd(room) {
+  const result = evaluateGameOver(room);
+  if (!result.finished) {
+    return false;
+  }
+  emitRoom(room);
+  io.to(room.code).emit("game:ended", result);
+  return true;
+}
+
 io.on("connection", (socket) => {
   socket.on("room:create", ({ name }) => {
-    const playerName = String(name || "").trim();
+    const playerName = normalizeUpper(name);
     if (!playerName) {
       socket.emit("action:error", "Nome é obrigatório");
       return;
@@ -181,7 +99,7 @@ io.on("connection", (socket) => {
 
   socket.on("room:join", ({ code, name }) => {
     const room = getRoom(code);
-    const playerName = String(name || "").trim();
+    const playerName = normalizeUpper(name);
 
     if (!room) {
       socket.emit("action:error", "Sala não encontrada");
@@ -240,26 +158,6 @@ io.on("connection", (socket) => {
 
     startGame(room);
     emitRoom(room);
-    schedulePlanning(room);
-  });
-
-  socket.on("game:choose-target", ({ targetId }) => {
-    const info = socketIndex.get(socket.id);
-    if (!info) {
-      return;
-    }
-    const room = getRoom(info.roomCode);
-    if (!room) {
-      return;
-    }
-
-    const result = planInvasion(room, info.playerId, targetId);
-    if (!result.ok) {
-      socket.emit("action:error", result.reason);
-      return;
-    }
-
-    emitRoom(room);
   });
 
   socket.on("game:finish", () => {
@@ -278,9 +176,28 @@ io.on("connection", (socket) => {
       return;
     }
 
-    clearRoomTimers(room.code);
     emitRoom(room);
     io.to(room.code).emit("game:ended", result);
+  });
+
+  socket.on("game:choose-target", ({ targetId }) => {
+    const info = socketIndex.get(socket.id);
+    if (!info) {
+      return;
+    }
+    const room = getRoom(info.roomCode);
+    if (!room) {
+      return;
+    }
+
+    const started = startInvasion(room, info.playerId, targetId, Date.now());
+    if (!started.ok) {
+      socket.emit("action:error", started.reason);
+      return;
+    }
+
+    socket.emit("challenge:start", started.challenge);
+    emitRoom(room);
   });
 
   socket.on("challenge:answer", ({ answer }) => {
@@ -305,6 +222,9 @@ io.on("connection", (socket) => {
     }
 
     socket.emit("challenge:resolved", response.result);
+    io.to(room.code).emit("attack:result", response.result);
+    emitRoom(room);
+    checkGameEnd(room);
   });
 
   socket.on("challenge:quit", () => {
@@ -317,13 +237,16 @@ io.on("connection", (socket) => {
       return;
     }
 
-    const response = quitChallenge(room, info.playerId);
+    const response = quitChallenge(room, info.playerId, Date.now());
     if (!response.ok) {
       socket.emit("action:error", response.reason);
       return;
     }
 
     socket.emit("challenge:resolved", response.result);
+    io.to(room.code).emit("attack:result", response.result);
+    emitRoom(room);
+    checkGameEnd(room);
   });
 
   socket.on("disconnect", () => {
