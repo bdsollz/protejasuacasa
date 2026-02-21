@@ -342,6 +342,7 @@ function resolveFailure(room, challenge, now) {
     targetId: target.id,
     success: false,
     value: cost,
+    byQuit: true,
     attackerAfter: attacker.points,
     targetAfter: target.points
   };

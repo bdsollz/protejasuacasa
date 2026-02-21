@@ -17,17 +17,27 @@
       </header>
 
       <section id="screen-entry" class="screen active">
-        <h2>Entrar no jogo</h2>
-        <label>Seu nome<input id="input-name" maxlength="20" /></label>
-        <label>Código da sala<input id="input-code" maxlength="6" /></label>
-        <div class="row">
-          <button id="btn-create">Criar sala</button>
-          <button id="btn-join">Entrar</button>
-        </div>
-        <label><input id="check-same-network" type="checkbox" /> Buscar salas na mesma rede</label>
-        <div class="panel">
-          <h3>Salas ativas sugeridas</h3>
-          <ul id="active-rooms-list"></ul>
+        <div class="entry-shell">
+          <h2 class="entry-title">Proteja sua Casa</h2>
+
+          <div class="panel entry-card">
+            <h3>Entrar no jogo</h3>
+            <label>Seu nome<input id="input-name" maxlength="20" /></label>
+            <label>Código da sala<input id="input-code" maxlength="6" /></label>
+          </div>
+
+          <div class="entry-primary">
+            <button id="btn-join">Entrar</button>
+          </div>
+
+          <div id="active-rooms-panel" class="panel">
+            <h3>Salas ativas sugeridas</h3>
+            <ul id="active-rooms-list"></ul>
+          </div>
+
+          <div class="entry-create-wrap">
+            <button id="btn-create" class="entry-create-link" type="button">Criar uma nova sala</button>
+          </div>
         </div>
       </section>
 

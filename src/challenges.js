@@ -85,13 +85,13 @@ function shuffle(list) {
 
 function randomDecimal(min, max) {
   const value = Math.random() * (max - min) + min;
-  return Number(value.toFixed(1));
+  return Number(value.toFixed(2));
 }
 
 function generateMathChallenge() {
   const operation = Math.random() < 0.5 ? "+" : "-";
-  let a = randomDecimal(1, 99.9);
-  let b = randomDecimal(1, 99.9);
+  let a = randomDecimal(1, 99.99);
+  let b = randomDecimal(1, 99.99);
 
   if (operation === "-" && b > a) {
     const tmp = a;
@@ -100,13 +100,13 @@ function generateMathChallenge() {
   }
 
   const result = operation === "+" ? a + b : a - b;
-  const numericAnswer = Number(result.toFixed(1));
+  const numericAnswer = Number(result.toFixed(2));
 
   return {
     answerType: "number",
     numericAnswer,
     hint: "Conta decimal de adicao ou subtracao",
-    masked: `${a.toFixed(1)} ${operation} ${b.toFixed(1)} = ?`
+    masked: `${a.toFixed(2)} ${operation} ${b.toFixed(2)} = ?`
   };
 }
 

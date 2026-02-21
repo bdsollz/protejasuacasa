@@ -10,7 +10,7 @@ const state = {
   room: null,
   challenge: null,
   updates: [],
-  preferSameNetwork: false,
+  preferSameNetwork: true,
   manualWaiting: false,
   latestRanking: null,
   finalReport: null,
@@ -23,8 +23,8 @@ const els = {
   globalRoomCode: document.getElementById("global-room-code"),
   name: document.getElementById("input-name"),
   code: document.getElementById("input-code"),
+  activeRoomsPanel: document.getElementById("active-rooms-panel"),
   activeRoomsList: document.getElementById("active-rooms-list"),
-  checkSameNetwork: document.getElementById("check-same-network"),
   settingGameMode: document.getElementById("setting-game-mode"),
   btnCreate: document.getElementById("btn-create"),
   btnJoin: document.getElementById("btn-join"),
@@ -154,10 +154,12 @@ function addUpdate(message) {
 
 function renderActiveRooms(rooms) {
   if (!rooms?.length) {
-    els.activeRoomsList.innerHTML = "<li>Nenhuma sala ativa no momento.</li>";
+    els.activeRoomsPanel.style.display = "none";
+    els.activeRoomsList.innerHTML = "";
     return;
   }
 
+  els.activeRoomsPanel.style.display = "block";
   els.activeRoomsList.innerHTML = rooms
     .map((room) => `<li><button data-code="${room.code}">Entrar em ${room.code} (${room.connectedPlayers}/${room.players})</button></li>`)
     .join("");
@@ -321,11 +323,6 @@ els.code.addEventListener("input", () => toUpperInput(els.code));
 els.challengeInput.addEventListener("input", () => toUpperInput(els.challengeInput));
 ["click", "keydown", "touchstart"].forEach((evt) => {
   window.addEventListener(evt, markUserActivity, { passive: true });
-});
-
-els.checkSameNetwork.addEventListener("change", () => {
-  state.preferSameNetwork = els.checkSameNetwork.checked;
-  refreshRoomsList();
 });
 
 els.btnCreate.addEventListener("click", () => {
@@ -521,6 +518,11 @@ socket.on("attack:result", (result) => {
   if (!me) return;
 
   if (result.attackerId === me.id) {
+    if (!result.success && result.byQuit) {
+      const msg = `Você saiu da casa e perdeu ${result.value} ponto(s).`;
+      addUpdate(msg);
+      showToast(msg);
+    }
     return;
   }
 

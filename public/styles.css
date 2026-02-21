@@ -25,6 +25,55 @@ body {
   padding: 14px;
 }
 
+.entry-shell {
+  min-height: calc(100vh - 120px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 18px;
+}
+
+.entry-title {
+  text-align: center;
+  font-size: 3rem;
+  line-height: 0.95;
+  margin: 8px 0 16px;
+  color: #f2f5ff;
+}
+
+.entry-card {
+  background: linear-gradient(145deg, #081737, #0d234f);
+}
+
+.entry-primary {
+  background: #0a1b44;
+  border-radius: 14px;
+  padding: 14px;
+  max-width: 300px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.entry-primary button {
+  width: 100%;
+}
+
+.entry-create-wrap {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.entry-create-link {
+  background: transparent;
+  color: #e5ebff;
+  padding: 0;
+  border-radius: 0;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .topbar {
   display: flex;
   justify-content: space-between;
