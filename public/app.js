@@ -19,6 +19,7 @@ const state = {
 };
 
 const els = {
+  topbar: document.getElementById("main-topbar"),
   statusLabel: document.getElementById("statusLabel"),
   globalRoomCode: document.getElementById("global-room-code"),
   name: document.getElementById("input-name"),
@@ -270,9 +271,11 @@ function renderRoom() {
   setGlobalRoomCode();
 
   if (!state.room) {
+    els.topbar.classList.add("hidden");
     showScreen("entry");
     return;
   }
+  els.topbar.classList.remove("hidden");
 
   const me = getMyPlayer();
 

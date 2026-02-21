@@ -80,6 +80,10 @@ body {
   align-items: center;
 }
 
+.topbar.hidden {
+  display: none;
+}
+
 #global-room-code {
   font-size: 0.8rem;
   opacity: 0.85;
