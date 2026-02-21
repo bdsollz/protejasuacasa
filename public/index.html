@@ -34,6 +34,13 @@
       <section id="screen-lobby" class="screen">
         <h2>Sala de espera</h2>
         <p>Código: <strong id="room-code">-</strong></p>
+        <div class="panel">
+          <h3>Modo de jogo</h3>
+          <select id="setting-game-mode">
+            <option value="WORDS">Palavras</option>
+            <option value="WORDS_MATH">Palavras e Contas</option>
+          </select>
+        </div>
         <div id="settings" class="panel"></div>
         <div class="panel">
           <h3>Jogadores</h3>
@@ -53,6 +60,7 @@
         <button id="btn-open-waiting-map" class="full">Ver sala de espera</button>
         <button id="btn-finish-game" class="full danger">Finalizar partida</button>
         <div id="grid-houses" class="grid"></div>
+        <button id="btn-reset-game-map" class="full danger">Reiniciar jogo</button>
       </section>
 
       <section id="screen-challenge" class="screen">
@@ -85,6 +93,7 @@
           <h3>Ranking da partida</h3>
           <ol id="end-global-ranking"></ol>
         </div>
+        <button id="btn-reset-game-end" class="full danger">Reiniciar jogo</button>
       </section>
 
       <p id="toast" class="toast"></p>

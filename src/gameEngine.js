@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS } from "./config.js";
-import { buildChallengeDeck, drawFromDeck } from "./challenges.js";
+import { buildChallengeDeck, drawChallengeForMode } from "./challenges.js";
 
 const FIXED_STEAL_VALUE = 10;
 
@@ -25,9 +25,11 @@ function normalizeAnswer(value) {
 }
 
 export function sanitizeSettings(input = {}) {
+  const gameMode = String(input.gameMode || DEFAULT_SETTINGS.gameMode).toUpperCase();
   return {
     initialPoints: Math.max(10, toInt(input.initialPoints, DEFAULT_SETTINGS.initialPoints)),
     victoryGoal: Math.max(50, toInt(input.victoryGoal, DEFAULT_SETTINGS.victoryGoal)),
+    gameMode: gameMode === "WORDS_MATH" ? "WORDS_MATH" : "WORDS",
     failCost: Math.max(1, toInt(input.failCost, DEFAULT_SETTINGS.failCost))
   };
 }
@@ -239,7 +241,7 @@ function drawChallenge(room) {
   if (!room.challengeDeck.length) {
     room.challengeDeck = buildChallengeDeck();
   }
-  return drawFromDeck(room.challengeDeck);
+  return drawChallengeForMode(room.challengeDeck, room.settings.gameMode);
 }
 
 export function startInvasion(room, attackerId, targetId) {
@@ -256,8 +258,10 @@ export function startInvasion(room, attackerId, targetId) {
   room.activeChallenges.set(attackerId, {
     attackerId,
     targetId,
-    answer: challenge.answer,
-    answerKey: normalizeAnswer(challenge.answer),
+    answerType: challenge.answerType || "text",
+    answer: challenge.answer || null,
+    answerKey: challenge.answer ? normalizeAnswer(challenge.answer) : null,
+    numericAnswer: typeof challenge.numericAnswer === "number" ? challenge.numericAnswer : null,
     hint: challenge.hint,
     masked: challenge.masked,
     resolved: false
@@ -423,12 +427,23 @@ export function submitAnswer(room, attackerId, answer, now) {
     return { ok: false, reason: "Desafio não encontrado" };
   }
 
-  const cleanAnswer = normalizeAnswer(answer);
-  if (!cleanAnswer) {
+  const rawAnswer = String(answer || "").trim();
+  if (!rawAnswer) {
     return { ok: false, reason: "Resposta vazia" };
   }
 
-  if (cleanAnswer === challenge.answerKey) {
+  let matched = false;
+  if (challenge.answerType === "number") {
+    const numeric = Number(rawAnswer.replace(",", "."));
+    if (Number.isFinite(numeric) && challenge.numericAnswer !== null) {
+      matched = Math.abs(numeric - challenge.numericAnswer) < 0.0001;
+    }
+  } else {
+    const cleanAnswer = normalizeAnswer(rawAnswer);
+    matched = cleanAnswer === challenge.answerKey;
+  }
+
+  if (matched) {
     challenge.resolved = true;
     const result = resolveSuccess(room, challenge, now);
     closeChallenge(room, attackerId);
@@ -494,4 +509,33 @@ export function finishGameByHost(room, hostId) {
     reason: "host_forced",
     report: buildFinalReport(room, winnerId, "host_forced")
   };
+}
+
+export function resetGameToLobby(room, hostId) {
+  if (room.hostId !== hostId) {
+    return { ok: false, reason: "Só o host pode reiniciar a partida" };
+  }
+
+  room.status = "lobby";
+  room.activeChallenges.clear();
+  room.challengeDeck = buildChallengeDeck();
+  room.attackLog = [];
+  room.finishOrder = [];
+  room.eliminationOrder = [];
+  room.lastAction = null;
+  room.totalPlayers = room.players.size;
+
+  for (const player of room.players.values()) {
+    player.points = 0;
+    player.status = "alive";
+    player.statusAt = null;
+    player.result = null;
+    player.totalStolen = 0;
+    player.successfulAttacks = 0;
+    player.failedAttacks = 0;
+    player.receivedFrom = {};
+    player.lostTo = {};
+  }
+
+  return { ok: true };
 }

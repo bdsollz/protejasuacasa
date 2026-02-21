@@ -2,6 +2,7 @@ const SOCKET_URL = window.__APP_CONFIG__?.SOCKET_URL || window.location.origin;
 const socket = io(SOCKET_URL, { transports: ["websocket", "polling"] });
 
 const SESSION_KEY = "proteja_sua_casa_session";
+const KEEPALIVE_IDLE_MS = 40_000;
 
 const state = {
   me: null,
@@ -13,6 +14,7 @@ const state = {
   manualWaiting: false,
   latestRanking: null,
   finalReport: null,
+  lastUserActivityAt: Date.now(),
   endNotice: ""
 };
 
@@ -23,6 +25,7 @@ const els = {
   code: document.getElementById("input-code"),
   activeRoomsList: document.getElementById("active-rooms-list"),
   checkSameNetwork: document.getElementById("check-same-network"),
+  settingGameMode: document.getElementById("setting-game-mode"),
   btnCreate: document.getElementById("btn-create"),
   btnJoin: document.getElementById("btn-join"),
   btnStart: document.getElementById("btn-start"),
@@ -31,6 +34,8 @@ const els = {
   btnOpenWaitingMap: document.getElementById("btn-open-waiting-map"),
   btnOpenWaitingChallenge: document.getElementById("btn-open-waiting-challenge"),
   btnOpenWaitingResult: document.getElementById("btn-open-waiting-result"),
+  btnResetGameMap: document.getElementById("btn-reset-game-map"),
+  btnResetGameEnd: document.getElementById("btn-reset-game-end"),
   roomCode: document.getElementById("room-code"),
   playersLobby: document.getElementById("players-lobby"),
   settings: document.getElementById("settings"),
@@ -67,6 +72,10 @@ function showToast(message) {
   setTimeout(() => els.toast.classList.remove("show"), 1800);
 }
 
+function markUserActivity() {
+  state.lastUserActivityAt = Date.now();
+}
+
 function toUpperInput(el) {
   el.value = (el.value || "").toUpperCase().replace(/\s+/g, "");
 }
@@ -77,6 +86,11 @@ function roomsListFilters() {
 
 function refreshRoomsList() {
   socket.emit("rooms:list", roomsListFilters());
+}
+
+function sendKeepalive() {
+  socket.emit("keepalive:ping");
+  fetch(`${SOCKET_URL}/healthz`, { method: "GET", cache: "no-store", mode: "no-cors" }).catch(() => {});
 }
 
 function saveSession() {
@@ -116,6 +130,9 @@ function setGlobalRoomCode() {
 function showScreen(name) {
   Object.values(screens).forEach((s) => s.classList.remove("active"));
   screens[name].classList.add("active");
+  window.scrollTo(0, 0);
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
 }
 
 function getMyPlayer() {
@@ -166,16 +183,19 @@ function renderLobby() {
     .join("");
 
   const s = room.settings;
+  els.settingGameMode.value = s.gameMode || "WORDS";
   els.settings.innerHTML = `
     <h3>Instruções de jogo</h3>
     <div>Pontos iniciais: ${s.initialPoints}</div>
     <div>Meta: ${s.victoryGoal}</div>
     <div>Tentativas: ilimitadas</div>
     <div>Saque por ataque: 10 pontos fixos</div>
+    <div>Contas (modo misto): decimais de adição/subtração</div>
   `;
 
   const me = getMyPlayer();
   const isHost = Boolean(me && me.isHost);
+  els.settingGameMode.disabled = !isHost || room.status !== "lobby";
   els.btnStart.style.display = isHost && room.status === "lobby" ? "block" : "none";
   els.btnBackGame.style.display = room.status === "in_game" ? "block" : "none";
 }
@@ -186,6 +206,7 @@ function renderMap() {
 
   els.myPoints.textContent = me ? me.points : 0;
   els.btnFinishGame.style.display = me && me.isHost ? "block" : "none";
+  els.btnResetGameMap.style.display = me && me.isHost ? "block" : "none";
 
   els.houses.innerHTML = room.players
     .map((p) => {
@@ -238,6 +259,8 @@ function openRankingScreen() {
   renderPlacementRanking(ranking);
   renderPersonalReport(state.finalReport);
   els.endRankText.textContent = state.endNotice || "";
+  const me = getMyPlayer();
+  els.btnResetGameEnd.style.display = me && me.isHost ? "block" : "none";
   showScreen("end");
 }
 
@@ -296,6 +319,9 @@ function connectFromSavedSession() {
 els.name.addEventListener("input", () => toUpperInput(els.name));
 els.code.addEventListener("input", () => toUpperInput(els.code));
 els.challengeInput.addEventListener("input", () => toUpperInput(els.challengeInput));
+["click", "keydown", "touchstart"].forEach((evt) => {
+  window.addEventListener(evt, markUserActivity, { passive: true });
+});
 
 els.checkSameNetwork.addEventListener("change", () => {
   state.preferSameNetwork = els.checkSameNetwork.checked;
@@ -304,6 +330,10 @@ els.checkSameNetwork.addEventListener("change", () => {
 
 els.btnCreate.addEventListener("click", () => {
   socket.emit("room:create", { name: els.name.value });
+});
+
+els.settingGameMode.addEventListener("change", () => {
+  socket.emit("room:update-settings", { gameMode: els.settingGameMode.value });
 });
 
 els.btnJoin.addEventListener("click", () => {
@@ -355,6 +385,14 @@ els.btnOpenWaitingResult.addEventListener("click", () => {
 
 els.btnFinishGame.addEventListener("click", () => {
   socket.emit("game:finish");
+});
+
+els.btnResetGameMap.addEventListener("click", () => {
+  socket.emit("game:reset");
+});
+
+els.btnResetGameEnd.addEventListener("click", () => {
+  socket.emit("game:reset");
 });
 
 els.submitAnswer.addEventListener("click", () => {
@@ -517,5 +555,21 @@ socket.on("game:ended", ({ winnerId, report }) => {
   openRankingScreen();
 });
 
+socket.on("game:reset", () => {
+  state.challenge = null;
+  state.finalReport = null;
+  state.latestRanking = null;
+  state.endNotice = "";
+  state.manualWaiting = false;
+  renderRoom();
+});
+
+socket.on("keepalive:pong", () => {});
+
 setGlobalRoomCode();
 renderActiveRooms([]);
+setInterval(() => {
+  if (Date.now() - state.lastUserActivityAt >= KEEPALIVE_IDLE_MS) {
+    sendKeepalive();
+  }
+}, KEEPALIVE_IDLE_MS);

@@ -10,6 +10,7 @@ import {
   evaluateGameOver,
   finishGameByHost,
   normalizeUpper,
+  resetGameToLobby,
   quitChallenge,
   roomSnapshot,
   sanitizeSettings,
@@ -34,6 +35,9 @@ const genPlayerId = customAlphabet("abcdefghijklmnopqrstuvwxyz0123456789", 16);
 const genReconnectKey = () => nanoid(36);
 
 app.use(express.static("public"));
+app.get("/healthz", (_req, res) => {
+  res.status(200).json({ ok: true, ts: Date.now() });
+});
 
 const rooms = new Map();
 const socketIndex = new Map();
@@ -250,6 +254,10 @@ io.on("connection", (socket) => {
     emitActiveRooms(socket, filters);
   });
 
+  socket.on("keepalive:ping", () => {
+    socket.emit("keepalive:pong", { ts: Date.now() });
+  });
+
   socket.on("room:create", ({ name }) => {
     if (hasWhitespace(name)) {
       socket.emit("action:error", "Nome não pode ter espaços");
@@ -434,6 +442,27 @@ io.on("connection", (socket) => {
 
     emitRoom(room);
     io.to(room.code).emit("game:ended", result);
+  });
+
+  socket.on("game:reset", () => {
+    const info = socketIndex.get(socket.id);
+    if (!info) {
+      return;
+    }
+
+    const room = getRoom(info.roomCode);
+    if (!room) {
+      return;
+    }
+
+    const result = resetGameToLobby(room, info.playerId);
+    if (!result.ok) {
+      socket.emit("action:error", result.reason);
+      return;
+    }
+
+    emitRoom(room);
+    io.to(room.code).emit("game:reset");
   });
 
   socket.on("game:choose-target", ({ targetId }) => {
