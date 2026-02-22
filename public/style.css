@@ -1,0 +1,400 @@
+:root {
+  --bg: #0f172a;
+  --bg-soft: #111e35;
+  --card: rgba(19, 30, 52, 0.9);
+  --card-2: rgba(14, 24, 44, 0.94);
+  --text: #f8fbff;
+  --muted: #b9c7df;
+  --accent: #38bdf8;
+  --accent-dark: #1fa0dc;
+  --danger: #d94141;
+  --line: rgba(255, 255, 255, 0.14);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: radial-gradient(circle at 12% 10%, #1d335d 0%, #131f38 30%, #0a1226 100%);
+  color: var(--text);
+  font-family: "Inter", "Avenir Next", "Montserrat", sans-serif;
+}
+
+body {
+  min-height: 100vh;
+}
+
+.app {
+  width: min(760px, 100%);
+  margin: 0 auto;
+  padding: 18px 16px 28px;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: linear-gradient(180deg, rgba(10, 19, 35, 0.96), rgba(10, 19, 35, 0.74));
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  backdrop-filter: blur(8px);
+  padding: 14px;
+}
+
+.brand {
+  margin: 0;
+  text-align: center;
+  font-size: clamp(2.2rem, 9vw, 4.5rem);
+  line-height: 0.96;
+  letter-spacing: 0.01em;
+  font-weight: 900;
+  text-transform: uppercase;
+  font-style: italic;
+}
+
+.room-pill,
+.conn {
+  margin-top: 10px;
+  text-align: center;
+  font-size: 0.95rem;
+}
+
+.conn.off {
+  color: #ffaaaa;
+}
+
+.screen-wrap {
+  margin-top: 18px;
+}
+
+.login-hero {
+  width: min(540px, 100%);
+  margin: 8px auto 10px;
+  text-align: center;
+}
+
+.login-kicker {
+  margin: 0;
+  color: rgba(248, 251, 255, 0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  font-size: 0.72rem;
+}
+
+.screen {
+  display: none;
+}
+
+.screen.active {
+  display: block;
+}
+
+.login-box,
+.panel,
+.challenge-card {
+  background: linear-gradient(160deg, var(--card), var(--card-2));
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 18px;
+}
+
+.login-box {
+  width: min(540px, 100%);
+  margin: 12px auto 0;
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.card {
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.24);
+}
+
+h2,
+h3,
+p {
+  margin: 0 0 10px;
+}
+
+.sub {
+  color: var(--muted);
+  font-size: 0.94rem;
+}
+
+.field-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  color: rgba(248, 251, 255, 0.7);
+}
+
+label {
+  display: block;
+  margin: 10px 0 6px;
+  font-size: 1rem;
+}
+
+input {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  border-radius: 14px;
+  padding: 13px 14px;
+  font-size: 1rem;
+  text-transform: uppercase;
+}
+
+input::placeholder {
+  color: rgba(248, 251, 255, 0.45);
+}
+
+input:focus {
+  outline: none;
+  border-color: rgba(56, 189, 248, 0.8);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.18);
+}
+
+.input-field {
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.btn {
+  width: 100%;
+  margin-top: 14px;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text);
+  padding: 13px;
+  font-size: 1.03rem;
+  font-weight: 700;
+  transition: transform 120ms ease, background-color 120ms ease;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #062135;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 900;
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.link-like {
+  margin-top: 18px;
+  float: right;
+  background: transparent;
+  color: rgba(248, 251, 255, 0.86);
+  border: 0;
+  font-size: 1.05rem;
+  text-decoration: underline;
+}
+
+.nearby {
+  margin-top: 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  padding: 12px;
+  border-radius: 12px;
+}
+
+.nearby.hidden,
+.hidden {
+  display: none;
+}
+
+.nearby-list {
+  display: grid;
+  gap: 8px;
+}
+
+.nearby-item {
+  width: 100%;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  color: var(--text);
+  padding: 10px;
+}
+
+.nearby-item:hover {
+  border-color: rgba(56, 189, 248, 0.65);
+}
+
+.mode-box {
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px;
+}
+
+.mode-title {
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.players {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.player-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.player-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.player-name {
+  font-weight: 800;
+}
+
+.player-status {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.game-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.updates {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  max-height: 180px;
+  overflow: auto;
+  background: rgba(8, 15, 31, 0.58);
+}
+
+.update-item {
+  font-size: 0.92rem;
+  margin-bottom: 6px;
+}
+
+.bottom-area {
+  margin-top: 22px;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  z-index: 100;
+}
+
+.overlay.hidden {
+  display: none;
+}
+
+.challenge-card {
+  width: min(520px, 100%);
+}
+
+.challenge-text {
+  font-size: 1.3rem;
+  letter-spacing: 0.08em;
+  margin-bottom: 10px;
+}
+
+.space-gap {
+  height: 20px;
+}
+
+.ranking,
+.report {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.rank-row,
+.report-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.14);
+}
+
+.rank-row:last-child,
+.report-row:last-child {
+  border-bottom: 0;
+}
+
+.bottom-stick {
+  margin-top: 18px;
+}
+
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #111d39;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 10px 16px;
+  z-index: 120;
+}
+
+.toast.err {
+  border-color: rgba(217, 65, 65, 0.6);
+  color: #ffd3d3;
+}
+
+@keyframes pulse-border {
+  0% {
+    border-color: rgba(56, 189, 248, 0.22);
+  }
+  50% {
+    border-color: rgba(56, 189, 248, 0.85);
+  }
+  100% {
+    border-color: rgba(56, 189, 248, 0.22);
+  }
+}
+
+.pulse-border {
+  animation: pulse-border 2.4s infinite;
+}
+
+@media (max-width: 560px) {
+  .app {
+    padding: 12px;
+  }
+
+  .brand {
+    font-size: clamp(2rem, 13vw, 3.5rem);
+  }
+}
