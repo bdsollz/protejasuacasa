@@ -1,18 +1,15 @@
 {
-  "name": "casas-e-saque",
-  "version": "0.1.0",
-  "description": "MVP do jogo Casas e Saque de Pontos",
-  "main": "src/server.js",
+  "name": "proteja-sua-casa",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "build:web": "node scripts/build-web.mjs",
-    "dev": "node src/server.js",
     "start": "node src/server.js",
-    "test": "node --test"
+    "dev": "node src/server.js",
+    "build:web": "node scripts/build-web.mjs"
   },
   "dependencies": {
     "express": "^4.21.2",
-    "nanoid": "^5.1.5",
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.1",
+    "nanoid": "^5.1.5"
   }
 }

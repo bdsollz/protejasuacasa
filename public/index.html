@@ -1,116 +1,76 @@
-<!doctype html>
-<html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Proteja sua Casa</title>
-    <link rel="stylesheet" href="/styles.css" />
-  </head>
-  <body>
-    <main class="app">
-      <header id="main-topbar" class="topbar">
-        <h1>Proteja sua Casa</h1>
-        <div>
-          <div id="statusLabel">Desconectado</div>
-          <div id="global-room-code">Sala: -</div>
-        </div>
-      </header>
-
-      <section id="screen-entry" class="screen active">
-        <div class="entry-shell">
-          <h2 class="entry-title">Proteja sua Casa</h2>
-
-          <div class="panel entry-card">
-            <h3>Entrar no jogo</h3>
-            <label>Seu nome<input id="input-name" maxlength="20" /></label>
-            <label>Código da sala<input id="input-code" maxlength="6" /></label>
-          </div>
-
-          <div class="entry-primary">
-            <button id="btn-join">Entrar</button>
-          </div>
-
-          <div id="active-rooms-panel" class="panel">
-            <h3>Salas ativas sugeridas</h3>
-            <ul id="active-rooms-list"></ul>
-          </div>
-
-          <div class="entry-create-wrap">
-            <button id="btn-create" class="entry-create-link" type="button">Criar uma nova sala</button>
-          </div>
-        </div>
-      </section>
-
-      <section id="screen-lobby" class="screen">
-        <h2>Sala de espera</h2>
-        <p>Código: <strong id="room-code">-</strong></p>
-        <div class="panel">
-          <h3>Modo de jogo</h3>
-          <select id="setting-game-mode">
-            <option value="WORDS">Palavras</option>
-            <option value="WORDS_MATH">Palavras e Contas</option>
-          </select>
-        </div>
-        <div id="settings" class="panel"></div>
-        <div class="panel">
-          <h3>Jogadores</h3>
-          <ul id="players-lobby"></ul>
-        </div>
-        <button id="btn-start" class="full">Iniciar partida</button>
-        <button id="btn-back-game" class="full">Voltar ao jogo ativo</button>
-        <button id="btn-leave-room" class="full danger">Sair da sala</button>
-      </section>
-
-      <section id="screen-map" class="screen">
-        <section class="panel updates-panel">
-          <h3>Atualizações</h3>
-          <ul id="updates-list"></ul>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <section id="screen-login" class="screen">
+            <h1 class="logo">PROTEJA SUA CASA</h1>
+            <div class="card">
+                <input type="text" id="input-name" placeholder="SEU NOME" maxlength="12">
+                <input type="text" id="input-room" placeholder="CÓDIGO DA SALA" maxlength="4">
+                <button id="btn-join" class="btn-primary">ENTRAR</button>
+                <div id="nearby-rooms"></div>
+                <a href="#" id="btn-create-trigger" class="btn-ghost-link">Criar uma nova sala</a>
+            </div>
         </section>
-        <p>Seu cofre: <strong id="my-points">0</strong></p>
-        <button id="btn-finish-game" class="full danger">Finalizar partida</button>
-        <div id="grid-houses" class="grid"></div>
-        <button id="btn-reset-game-map" class="full danger">Reiniciar jogo</button>
-        <button id="btn-open-waiting-map" class="full">Ver sala de espera</button>
-      </section>
 
-      <section id="screen-challenge" class="screen">
-        <h2>Pegar pontos</h2>
-        <p id="challenge-target"></p>
-        <p id="challenge-hint"></p>
-        <p id="challenge-word" class="word"></p>
-        <label>Resposta<input id="challenge-input" autocomplete="off" /></label>
-        <button id="btn-submit-answer" class="full">Enviar</button>
-        <div class="button-gap-double"></div>
-        <button id="btn-quit-challenge" class="full danger">Sair da casa</button>
-        <button id="btn-open-waiting-challenge" class="full">Ver sala de espera</button>
-      </section>
+        <section id="screen-lobby" class="screen hidden">
+            <div class="header-info">
+                <span class="room-badge">SALA: <b id="display-room"></b></span>
+            </div>
+            <h2>SALA DE ESPERA</h2>
+            <div class="card">
+                <div id="player-list-lobby" class="list-group"></div>
+                <div id="host-controls" class="hidden">
+                    <label>MODO DE JOGO</label>
+                    <select id="select-mode">
+                        <option value="Palavras">Palavras</option>
+                        <option value="Palavras e Contas">Palavras e Contas</option>
+                    </select>
+                    <button id="btn-start" class="btn-success">INICIAR PARTIDA</button>
+                </div>
+                <p id="wait-msg" class="hint">Aguardando o host iniciar...</p>
+            </div>
+        </section>
 
-      <section id="screen-result" class="screen">
-        <h2>Resultado</h2>
-        <p id="result-text"></p>
-        <button id="btn-open-waiting-result" class="full">Ver sala de espera</button>
-      </section>
+        <section id="screen-game" class="screen hidden">
+            <div class="header-info">
+                <span class="room-badge">SALA: <b class="room-code-txt"></b></span>
+                <span class="points-badge">MEUS PONTOS: <b id="my-points">0</b></span>
+            </div>
+            <div id="challenge-area" class="challenge-overlay hidden">
+                <div class="challenge-card">
+                    <h3>RESOLVA PARA PEGAR PONTOS</h3>
+                    <div id="challenge-text" class="challenge-display"></div>
+                    <input type="text" id="input-answer" placeholder="RESPOSTA" autofocus>
+                    <button id="btn-submit" class="btn-primary">ENVIAR</button>
+                    <div class="spacer-large"></div>
+                    <button id="btn-quit-challenge" class="btn-danger">SAIR DA CASA</button>
+                </div>
+            </div>
+            <div id="main-game-area">
+                <div id="updates-panel" class="updates-bar"></div>
+                <div id="player-grid" class="grid"></div>
+                <div class="bottom-nav">
+                    <button id="btn-go-lobby" class="btn-ghost">VER SALA DE ESPERA</button>
+                </div>
+            </div>
+        </section>
 
-      <section id="screen-end" class="screen">
-        <h2>Fim de jogo</h2>
-        <p id="end-text"></p>
-        <p id="end-rank-text"></p>
-        <div class="panel">
-          <h3>Quem pegou seus pontos</h3>
-          <ul id="end-personal-report"></ul>
-        </div>
-        <div class="panel">
-          <h3>Ranking da partida</h3>
-          <ol id="end-global-ranking"></ol>
-        </div>
-        <button id="btn-reset-game-end" class="full danger">Reiniciar jogo</button>
-      </section>
-
-      <p id="toast" class="toast"></p>
-    </main>
-
-    <script src="/config.js"></script>
-    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" crossorigin="anonymous"></script>
-    <script src="/app.js"></script>
-  </body>
+        <section id="screen-ranking" class="screen hidden">
+            <h1 class="logo">FIM DE JOGO</h1>
+            <div class="card" id="ranking-list"></div>
+            <div class="bottom-nav">
+                <button id="btn-host-restart" class="btn-primary hidden">REINICIAR JOGO</button>
+            </div>
+        </section>
+    </div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+</body>
 </html>
