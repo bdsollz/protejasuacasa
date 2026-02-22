@@ -19,7 +19,8 @@
     challengeTargetId: null,
     nearbyRooms: [],
     myNotice: "",
-    awaitingCreateAck: false
+    awaitingCreateAck: false,
+    createTimeoutId: null
   };
 
   const $ = (id) => document.getElementById(id);
@@ -293,6 +294,8 @@
   }
 
   function sendCreate() {
+    if (state.awaitingCreateAck) return;
+
     if (!socket.connected) {
       showToast("Servidor desconectado. Aguarde reconectar.", true);
       return;
@@ -307,12 +310,29 @@
     }
 
     state.awaitingCreateAck = true;
-    socket.emit("createRoom", { playerName: name });
+    el.btnCreate.disabled = true;
+    el.btnCreate.textContent = "Criando sala...";
+    socket.emit("createRoom", { playerName: name }, (ack) => {
+      state.awaitingCreateAck = false;
+      if (state.createTimeoutId) {
+        clearTimeout(state.createTimeoutId);
+        state.createTimeoutId = null;
+      }
+      el.btnCreate.disabled = false;
+      el.btnCreate.textContent = "Criar uma nova sala";
 
-    setTimeout(() => {
+      if (!ack?.ok) {
+        showToast(String(ack?.error || "Falha ao criar sala."), true);
+      }
+    });
+
+    state.createTimeoutId = setTimeout(() => {
       if (!state.awaitingCreateAck) return;
       showToast("Não foi possível criar a sala agora. Tente novamente.", true);
       state.awaitingCreateAck = false;
+      el.btnCreate.disabled = false;
+      el.btnCreate.textContent = "Criar uma nova sala";
+      state.createTimeoutId = null;
     }, 4500);
   }
 
@@ -407,6 +427,12 @@
 
   socket.on("joined", ({ roomCode, playerId, reconnectKey }) => {
     state.awaitingCreateAck = false;
+    if (state.createTimeoutId) {
+      clearTimeout(state.createTimeoutId);
+      state.createTimeoutId = null;
+    }
+    el.btnCreate.disabled = false;
+    el.btnCreate.textContent = "Criar uma nova sala";
     state.roomCode = sanitizeUpperNoSpace(roomCode);
     state.playerId = playerId;
     state.reconnectKey = reconnectKey;

@@ -27,3 +27,7 @@ Abra `http://localhost:3000`.
 ```bash
 npm test
 ```
+
+## Design e UX
+
+A referencia obrigatoria para evolucao de interface esta em `/Users/brunooliver/Documents/Game/docs/design-reference.md`.

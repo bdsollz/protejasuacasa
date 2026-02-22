@@ -110,10 +110,12 @@ io.on("connection", (socket) => {
     emitNearby(socket);
   });
 
-  socket.on("createRoom", ({ playerName } = {}) => {
+  socket.on("createRoom", ({ playerName } = {}, ack) => {
+    const reply = typeof ack === "function" ? ack : () => {};
     const cleanName = String(playerName || "").toUpperCase().replace(/\s+/g, "").trim();
     if (!cleanName) {
       socket.emit("actionError", "Nome é obrigatório.");
+      reply({ ok: false, error: "Nome é obrigatório." });
       return;
     }
 
@@ -128,6 +130,11 @@ io.on("connection", (socket) => {
       roomCode: room.code,
       playerId: host.id,
       reconnectKey: host.reconnectKey
+    });
+    reply({
+      ok: true,
+      roomCode: room.code,
+      playerId: host.id
     });
 
     emitRoom(room);
