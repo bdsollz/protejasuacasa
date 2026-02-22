@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Proteja sua Casa</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div id="app" class="app">
+      <header class="topbar">
+        <h1 class="brand">Proteja sua Casa</h1>
+        <div class="room-pill" id="roomPill">Sala: --</div>
+        <div class="conn" id="connectionBadge">Conectado</div>
+      </header>
+
+      <main class="screen-wrap">
+        <section id="screenLogin" class="screen active">
+          <div class="login-hero">
+            <p class="login-kicker">Invasao estrategica em tempo real</p>
+          </div>
+
+          <div class="login-box card pulse-border">
+            <h2>Entrar no jogo</h2>
+
+            <label for="inputName" class="field-label">Seu nome</label>
+            <input id="inputName" class="input-field" maxlength="14" autocomplete="nickname" />
+
+            <label for="inputRoomCode" class="field-label">Codigo da sala</label>
+            <input id="inputRoomCode" class="input-field" maxlength="8" autocomplete="one-time-code" />
+
+            <button id="btnEnter" class="btn btn-primary">Entrar</button>
+            <button id="btnCreate" class="link-like">Criar uma nova sala</button>
+
+            <div id="nearbyWrap" class="nearby hidden glass">
+              <div class="nearby-title">Salas ativas na sua rede</div>
+              <div id="nearbyList" class="nearby-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="screenWaiting" class="screen">
+          <div class="panel">
+            <h2>SALA DE ESPERA</h2>
+            <p class="sub" id="waitStatus">Aguardando host iniciar.</p>
+
+            <div class="mode-box" id="modeBox">
+              <div class="mode-title">Modo</div>
+              <label><input type="radio" name="mode" value="Palavras" checked /> Palavras</label>
+              <label><input type="radio" name="mode" value="Palavras e Contas" /> Palavras e Contas</label>
+              <p class="sub">Contas no formato: XX + XX ou XX - XX</p>
+            </div>
+
+            <div class="players" id="waitingPlayers"></div>
+
+            <div class="actions">
+              <button id="btnStart" class="btn btn-primary">Iniciar partida</button>
+              <button id="btnFinish" class="btn">Finalizar partida</button>
+              <button id="btnRestartWait" class="btn">Reiniciar jogo</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="screenGame" class="screen">
+          <div class="panel">
+            <div class="game-head">
+              <div id="myPoints">Seu cofre: 0</div>
+              <div id="gameGoal">Meta: 200</div>
+            </div>
+
+            <div id="updatesPanel" class="updates"></div>
+            <div id="gamePlayers" class="players"></div>
+
+            <div class="bottom-area">
+              <button id="btnViewWaiting" class="btn">Ver sala de espera</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="screenRanking" class="screen">
+          <div class="panel">
+            <h2>Ranking</h2>
+            <p class="sub" id="rankNotice">Resultado da partida</p>
+
+            <div class="ranking" id="rankingList"></div>
+
+            <h3>Quem pegou seus pontos</h3>
+            <div id="lossReport" class="report"></div>
+
+            <h3>Ranking de ataques</h3>
+            <div id="attackRanking" class="report"></div>
+
+            <div class="actions bottom-stick">
+              <button id="btnRestartRank" class="btn btn-primary">Reiniciar jogo</button>
+              <button id="btnBackWaiting" class="btn">Voltar para sala de espera</button>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <section id="challengeOverlay" class="overlay hidden">
+        <div class="challenge-card">
+          <h2 id="challengeTarget">Casa de --</h2>
+          <p id="challengeText" class="challenge-text"></p>
+          <p id="challengeHint" class="sub"></p>
+
+          <input id="inputAnswer" maxlength="30" autocomplete="off" />
+
+          <button id="btnSubmitAnswer" class="btn btn-primary">Enviar</button>
+
+          <div class="space-gap"></div>
+
+          <button id="btnQuitChallenge" class="btn">Sair da casa</button>
+        </div>
+      </section>
+
+      <div id="toast" class="toast hidden"></div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/config.js"></script>
+    <script src="/script.js"></script>
+  </body>
+</html>
