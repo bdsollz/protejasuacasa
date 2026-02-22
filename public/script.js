@@ -1,11 +1,19 @@
 (() => {
   const config = window.__APP_CONFIG__ || { SOCKET_URL: "" };
   const backendBase = (config.SOCKET_URL || "").replace(/\/$/, "");
-  const socket = io(backendBase || undefined, {
-    transports: ["websocket", "polling"],
-    reconnection: true,
-    reconnectionAttempts: Infinity
-  });
+  const ioFactory = typeof window.io === "function" ? window.io : null;
+  const socket = ioFactory
+    ? ioFactory(backendBase || undefined, {
+        transports: ["websocket", "polling"],
+        reconnection: true,
+        reconnectionAttempts: Infinity
+      })
+    : {
+        connected: false,
+        on() {},
+        off() {},
+        emit() {}
+      };
 
   const SESSION_KEY = "proteja-sua-casa-session";
 
@@ -83,6 +91,12 @@
       el.toast.classList.add("err");
     }
     setTimeout(() => el.toast.classList.add("hidden"), 2200);
+  }
+
+  function socketReady() {
+    if (ioFactory) return true;
+    showToast("Falha ao carregar tempo real. Recarregue a pagina.", true);
+    return false;
   }
 
   function showScreen(id) {
@@ -275,6 +289,7 @@
   }
 
   function sendJoin() {
+    if (!socketReady()) return;
     const name = sanitizeUpperNoSpace(el.inputName.value);
     const code = sanitizeUpperNoSpace(el.inputRoomCode.value);
 
@@ -294,6 +309,7 @@
   }
 
   function sendCreate() {
+    if (!socketReady()) return;
     if (state.awaitingCreateAck) return;
 
     if (!socket.connected) {
@@ -558,6 +574,14 @@
     renderWaiting();
     showToast("Partida reiniciada e sala de espera liberada.");
   });
+
+  if (!ioFactory) {
+    el.connectionBadge.textContent = "Desconectado";
+    el.connectionBadge.classList.add("off");
+    setTimeout(() => {
+      showToast("Tempo real indisponivel. Verifique o deploy.", true);
+    }, 200);
+  }
 
   setInterval(() => {
     if (document.hidden) return;
