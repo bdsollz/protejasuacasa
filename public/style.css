@@ -195,13 +195,17 @@ input:focus {
 }
 
 .link-like {
+  display: inline-block;
   margin-top: 18px;
-  float: right;
+  margin-left: auto;
+  position: relative;
+  z-index: 3;
   background: transparent;
   color: rgba(248, 251, 255, 0.86);
   border: 0;
   font-size: 1.05rem;
   text-decoration: underline;
+  cursor: pointer;
 }
 
 .nearby {

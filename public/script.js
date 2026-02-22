@@ -18,7 +18,8 @@
     challengeOpen: false,
     challengeTargetId: null,
     nearbyRooms: [],
-    myNotice: ""
+    myNotice: "",
+    awaitingCreateAck: false
   };
 
   const $ = (id) => document.getElementById(id);
@@ -292,13 +293,27 @@
   }
 
   function sendCreate() {
+    if (!socket.connected) {
+      showToast("Servidor desconectado. Aguarde reconectar.", true);
+      return;
+    }
+
     const name = sanitizeUpperNoSpace(el.inputName.value);
     el.inputName.value = name;
     if (!name) {
       showToast("Informe seu nome para criar sala.", true);
+      el.inputName.focus();
       return;
     }
+
+    state.awaitingCreateAck = true;
     socket.emit("createRoom", { playerName: name });
+
+    setTimeout(() => {
+      if (!state.awaitingCreateAck) return;
+      showToast("Não foi possível criar a sala agora. Tente novamente.", true);
+      state.awaitingCreateAck = false;
+    }, 4500);
   }
 
   el.inputName.addEventListener("input", () => {
@@ -311,6 +326,10 @@
 
   el.btnEnter.addEventListener("click", sendJoin);
   el.btnCreate.addEventListener("click", sendCreate);
+  el.btnCreate.addEventListener("touchstart", (event) => {
+    event.preventDefault();
+    sendCreate();
+  }, { passive: false });
 
   el.btnStart.addEventListener("click", () => {
     const checked = document.querySelector("input[name='mode']:checked");
@@ -387,6 +406,7 @@
   });
 
   socket.on("joined", ({ roomCode, playerId, reconnectKey }) => {
+    state.awaitingCreateAck = false;
     state.roomCode = sanitizeUpperNoSpace(roomCode);
     state.playerId = playerId;
     state.reconnectKey = reconnectKey;
