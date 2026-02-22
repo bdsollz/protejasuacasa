@@ -1,16 +1,17 @@
-import { WORDS, generateMath, maskWord } from "./challenges.js";
+import { WORD_BANK, generateMath, maskWord } from "./challenges.js";
 
-function normalizeAnswer(value) {
+function normalizeTextAnswer(value) {
   return String(value || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/Ç/g, "C")
     .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
     .trim();
 }
 
 function cloneDeck() {
-  return [...WORDS];
+  return [...WORD_BANK];
 }
 
 function ensureDeck(room) {
@@ -144,13 +145,13 @@ export class GameEngine {
 
     ensureDeck(room);
     const idx = Math.floor(Math.random() * room.deck.length);
-    const answer = room.deck.splice(idx, 1)[0];
+    const entry = room.deck.splice(idx, 1)[0];
 
     return {
       answerType: "text",
-      text: maskWord(answer),
-      answer,
-      hint: `Dica: palavra com ${answer.length} letras`
+      text: maskWord(entry.word),
+      answer: entry.word,
+      hint: `Dica: ${entry.hint}`
     };
   }
 
@@ -191,7 +192,9 @@ export class GameEngine {
     const target = room.players.get(targetId);
     if (!target) return null;
 
-    const isCorrect = normalizeAnswer(answer) === normalizeAnswer(challenge.answer);
+    const isCorrect = challenge.answerType === "number"
+      ? String(answer || "").trim() === String(challenge.answer || "").trim()
+      : normalizeTextAnswer(answer) === normalizeTextAnswer(challenge.answer);
     if (!isCorrect) {
       return {
         success: false,

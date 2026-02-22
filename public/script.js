@@ -54,6 +54,7 @@
     waitingPlayers: $("waitingPlayers"),
     waitStatus: $("waitStatus"),
     modeBox: $("modeBox"),
+    selectMode: $("selectMode"),
     btnStart: $("btnStart"),
     btnFinish: $("btnFinish"),
     btnRestartWait: $("btnRestartWait"),
@@ -175,8 +176,10 @@
     el.btnRestartWait.style.display = host ? "block" : "none";
 
     const currentMode = state.room.mode || "Palavras";
-    const radio = document.querySelector(`input[name='mode'][value='${currentMode}']`);
-    if (radio) radio.checked = true;
+    if (el.selectMode) {
+      el.selectMode.value = currentMode;
+      el.selectMode.disabled = !host;
+    }
 
     el.waitingPlayers.innerHTML = "";
     (state.room.players || []).forEach((p) => {
@@ -368,8 +371,7 @@
   }, { passive: false });
 
   el.btnStart.addEventListener("click", () => {
-    const checked = document.querySelector("input[name='mode']:checked");
-    const mode = checked ? checked.value : "Palavras";
+    const mode = el.selectMode ? el.selectMode.value : "Palavras";
     socket.emit("startGame", { roomCode: state.roomCode, mode });
   });
 

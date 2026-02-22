@@ -46,8 +46,11 @@
 
             <div class="mode-box" id="modeBox">
               <div class="mode-title">Modo</div>
-              <label><input type="radio" name="mode" value="Palavras" checked /> Palavras</label>
-              <label><input type="radio" name="mode" value="Palavras e Contas" /> Palavras e Contas</label>
+              <label for="selectMode" class="field-label">Selecione o modo</label>
+              <select id="selectMode" class="mode-select">
+                <option value="Palavras">Palavras</option>
+                <option value="Palavras e Contas">Palavras e Contas</option>
+              </select>
               <p class="sub">Contas no formato: XX + XX ou XX - XX</p>
             </div>
 

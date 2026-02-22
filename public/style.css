@@ -42,14 +42,14 @@ body {
   border-radius: 16px;
   border: 1px solid var(--line);
   backdrop-filter: blur(8px);
-  padding: 14px;
+  padding: 10px 12px;
 }
 
 .brand {
   margin: 0;
   text-align: center;
-  font-size: clamp(2.2rem, 9vw, 4.5rem);
-  line-height: 0.96;
+  font-size: clamp(1.55rem, 7.2vw, 3rem);
+  line-height: 0.98;
   letter-spacing: 0.01em;
   font-weight: 900;
   text-transform: uppercase;
@@ -58,9 +58,9 @@ body {
 
 .room-pill,
 .conn {
-  margin-top: 10px;
+  margin-top: 6px;
   text-align: center;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 
 .conn.off {
@@ -248,12 +248,30 @@ input:focus {
   margin-top: 14px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  padding: 10px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .mode-title {
   font-weight: 700;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
+}
+
+.mode-select {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  border-radius: 12px;
+  padding: 12px 13px;
+  font-size: 0.98rem;
+  margin-top: 8px;
+}
+
+.mode-select:focus {
+  outline: none;
+  border-color: rgba(56, 189, 248, 0.8);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.18);
 }
 
 .players {
@@ -262,10 +280,16 @@ input:focus {
   margin-top: 12px;
 }
 
+.actions {
+  margin-top: 14px;
+  display: grid;
+  gap: 10px;
+}
+
 .player-card {
   border: 1px solid var(--line);
   border-radius: 12px;
-  padding: 10px;
+  padding: 12px;
   background: rgba(255, 255, 255, 0.06);
 }
 
@@ -404,6 +428,6 @@ input:focus {
   }
 
   .brand {
-    font-size: clamp(2rem, 13vw, 3.5rem);
+    font-size: clamp(1.45rem, 8.4vw, 2.3rem);
   }
 }
