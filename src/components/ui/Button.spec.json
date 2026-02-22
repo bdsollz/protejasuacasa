@@ -1,0 +1,11 @@
+{
+  "component": "Button",
+  "sizes": {
+    "height": 44,
+    "paddingX": 16,
+    "radius": "pill"
+  },
+  "variants": ["primary", "secondary", "ghost", "danger"],
+  "states": ["default", "hover", "active", "focus-visible", "disabled", "loading"],
+  "tokens": ["--gradient-cta", "--color-border", "--color-text", "--color-danger"]
+}

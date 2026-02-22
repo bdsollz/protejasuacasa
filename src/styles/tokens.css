@@ -1,0 +1,52 @@
+:root {
+  --font-sans: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  --color-primary: #4f46e5;
+  --color-secondary: #0e7490;
+  --color-accent: #e11d48;
+  --color-bg: #0b1220;
+  --color-surface: #111a2e;
+  --color-text: #eaf0ff;
+  --color-muted: #a7b6d9;
+  --color-border: rgba(234, 240, 255, 0.12);
+  --color-success: #22c55e;
+  --color-danger: #ef4444;
+
+  --gradient-cta: linear-gradient(135deg, #4f46e5 0%, #0e7490 100%);
+  --gradient-glow: radial-gradient(900px circle at 20% 10%, rgba(79, 70, 229, 0.2), transparent 60%),
+    radial-gradient(700px circle at 85% 80%, rgba(14, 116, 144, 0.18), transparent 55%);
+
+  --shadow-soft: 0 10px 26px rgba(10, 16, 32, 0.2);
+  --motion-fast: 150ms;
+  --motion-screen: 300ms;
+  --motion-ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+:root[data-theme="light"] {
+  --color-primary: #4f46e5;
+  --color-secondary: #0e7490;
+  --color-accent: #e11d48;
+  --color-bg: #f3f6ff;
+  --color-surface: #ffffff;
+  --color-text: #0f172a;
+  --color-muted: #475569;
+  --color-border: rgba(15, 23, 42, 0.12);
+  --color-success: #15803d;
+  --color-danger: #b91c1c;
+
+  --gradient-glow: radial-gradient(900px circle at 15% 8%, rgba(79, 70, 229, 0.14), transparent 58%),
+    radial-gradient(700px circle at 85% 80%, rgba(14, 116, 144, 0.13), transparent 55%);
+
+  --shadow-soft: 0 8px 20px rgba(15, 23, 42, 0.1);
+}
+
+:root[data-motion="reduce"] {
+  --motion-fast: 80ms;
+  --motion-screen: 140ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 90ms;
+    --motion-screen: 150ms;
+  }
+}

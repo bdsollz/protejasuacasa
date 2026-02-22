@@ -1,0 +1,10 @@
+{
+  "component": "Toast",
+  "states": ["visible", "auto-dismiss-4s"],
+  "behavior": {
+    "maxVisible": 1,
+    "dismissMs": 4000
+  },
+  "a11y": ["role=status", "aria-live=polite"],
+  "tokens": ["--color-surface", "--color-border", "--color-success", "--color-danger"]
+}

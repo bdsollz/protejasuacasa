@@ -1,0 +1,11 @@
+{
+  "component": "TextField",
+  "states": ["idle", "focus", "error", "disabled"],
+  "sizes": {
+    "height": 44,
+    "radius": "md",
+    "paddingX": 12
+  },
+  "tokens": ["--color-border", "--color-muted", "--color-danger", "--color-text"],
+  "a11y": ["label association", "aria-invalid", "aria-describedby"]
+}

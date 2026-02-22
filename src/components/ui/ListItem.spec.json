@@ -1,0 +1,10 @@
+{
+  "component": "ListItem",
+  "states": ["default", "hover", "active", "focus"],
+  "sizes": {
+    "minHeight": 56,
+    "radius": "md",
+    "padding": 12
+  },
+  "tokens": ["--color-border", "--color-muted", "--color-primary"]
+}

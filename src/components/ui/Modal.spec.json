@@ -1,0 +1,11 @@
+{
+  "component": "Modal",
+  "states": ["open", "close-by-esc", "close-by-overlay", "focus-trap"],
+  "sizes": {
+    "maxWidth": 640,
+    "radius": "lg",
+    "padding": 20
+  },
+  "tokens": ["--color-surface", "--color-border", "--shadow-soft"],
+  "a11y": ["role=dialog", "aria-modal=true", "focus trap", "esc closes"]
+}

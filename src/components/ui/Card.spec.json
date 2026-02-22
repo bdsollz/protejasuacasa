@@ -1,0 +1,11 @@
+{
+  "component": "Card",
+  "variants": ["elevated", "outlined", "filled"],
+  "states": ["default", "hover", "focus"],
+  "sizes": {
+    "radius": "lg",
+    "padding": 16,
+    "border": 1
+  },
+  "tokens": ["--color-surface", "--color-border", "--color-primary", "--shadow-soft"]
+}
