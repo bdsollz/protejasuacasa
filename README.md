@@ -17,6 +17,13 @@ npm install
 npm run dev
 ```
 
+## Deploy Cloudflare Pages (definitivo)
+- O projeto inclui `wrangler.toml` com `pages_build_output_dir = "dist"`.
+- Build command recomendado: `npm run build:web` (ou `npm run build`).
+- Output directory: `dist`.
+- O arquivo `public/_headers` evita cache agressivo de HTML (previne frontend antigo).
+- O arquivo `public/_redirects` habilita fallback SPA (`/* -> /index.html`).
+
 Build e preview:
 ```bash
 npm run build
