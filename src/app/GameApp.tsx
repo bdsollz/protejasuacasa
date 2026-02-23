@@ -193,6 +193,10 @@ export function GameApp() {
       setIsConnected(false);
     };
 
+    const onConnectError = () => {
+      setIsConnected(false);
+    };
+
     const onActionError = (msg: string) => {
       pushToast(String(msg || "Ação inválida"), "danger");
       setCreatingRoom(false);
@@ -330,6 +334,7 @@ export function GameApp() {
 
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
+    socket.on("connect_error", onConnectError);
     socket.on("actionError", onActionError);
     socket.on("roomsNearby", onNearby);
     socket.on("joined", onJoined);
@@ -350,6 +355,7 @@ export function GameApp() {
       }
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
+      socket.off("connect_error", onConnectError);
       socket.off("actionError", onActionError);
       socket.off("roomsNearby", onNearby);
       socket.off("joined", onJoined);
@@ -365,6 +371,14 @@ export function GameApp() {
       socket.disconnect();
     };
   }, [backendBase, pushToast]);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (screen !== "game") {
+      setChallenge(null);
+      setAnswerInput("");
+    }
+  }, [screen]);
 
   useEffect(() => {
     const socket = socketRef.current;
@@ -388,9 +402,16 @@ export function GameApp() {
 
   function createRoom() {
     const socket = socketRef.current;
-    if (!socket || !socket.connected) {
+    if (!socket) {
       setIsConnected(false);
       pushToast("Servidor desconectado. Aguarde reconectar.", "danger");
+      return;
+    }
+
+    if (!socket.connected) {
+      socket.connect();
+      setIsConnected(false);
+      pushToast("Servidor desconectado. Reconectando...", "danger");
       return;
     }
 
@@ -438,9 +459,16 @@ export function GameApp() {
 
   function joinRoom() {
     const socket = socketRef.current;
-    if (!socket || !socket.connected) {
+    if (!socket) {
       setIsConnected(false);
       pushToast("Servidor desconectado. Aguarde reconectar.", "danger");
+      return;
+    }
+
+    if (!socket.connected) {
+      socket.connect();
+      setIsConnected(false);
+      pushToast("Servidor desconectado. Reconectando...", "danger");
       return;
     }
 
@@ -551,8 +579,15 @@ export function GameApp() {
           />
 
           <div className="grid gap-2 sm:grid-cols-2">
-            <Button onClick={joinRoom}>Entrar</Button>
-            <Button variant="secondary" onClick={createRoom} loading={creatingRoom}>
+            <Button onClick={joinRoom} disabled={!isConnected}>
+              Entrar
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={createRoom}
+              loading={creatingRoom}
+              disabled={!isConnected}
+            >
               Criar nova sala
             </Button>
           </div>
