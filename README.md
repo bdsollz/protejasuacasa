@@ -129,11 +129,12 @@ Gera screenshots de:
 - 1440x900 e 390x844
 - Saída: `/Users/brunooliver/Documents/Game/mockups/*.png`
 
-## Rotas demo
-- `/` Dashboard
-- `/form` Form demo
-- `/components` Showcase UI
-- `/settings` Tema + movimento
+## Jogo em produção
+- A rota `/` abre diretamente o jogo (entrar/criar sala/sala de espera/partida/ranking).
+- O frontend conecta no backend Socket.IO usando `VITE_SOCKET_URL`.
+- Exemplo para Cloudflare Pages:
+  - `VITE_SOCKET_URL=https://proteja-sua-casa.onrender.com`
+- Se `VITE_SOCKET_URL` não estiver definido, o frontend usa esse mesmo endpoint como fallback.
 
 ## Notas rápidas para React Native e Flutter
 - React Native:
