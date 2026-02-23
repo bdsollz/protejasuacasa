@@ -18,6 +18,5 @@
     },
     "types": ["vite/client", "vitest/globals", "react", "react-dom", "node"]
   },
-  "include": ["src", "scripts", "tests", "playwright.config.ts"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": ["src", "scripts", "tests"]
 }

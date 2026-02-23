@@ -23,6 +23,13 @@ npm run build
 npm run preview
 ```
 
+Type check (opcional no deploy):
+```bash
+npm run typecheck
+```
+
+No deploy (Cloudflare/Render), o build usa `vite build` para evitar falhas por arquivos de tooling (Playwright/Vitest).
+
 ## Scripts
 - `npm run dev`: sobe ambiente de desenvolvimento
 - `npm run build`: valida TypeScript e gera build de produção
